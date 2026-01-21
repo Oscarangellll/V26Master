@@ -33,8 +33,8 @@ for loc, df_loc in df_weather.groupby("locationID"):
         "monthly_std": {}
     }
     
-    y[:, 0], models[loc]["weather"]["boxcox"]["Speed"] = boxcox(y[:, 0])
-    y[:, 1], models[loc]["weather"]["boxcox"]["Height"] = boxcox(y[:, 1])
+    y[:, 0], models[loc]["weather"]["boxcox"]["speed"] = boxcox(y[:, 0])
+    y[:, 1], models[loc]["weather"]["boxcox"]["height"] = boxcox(y[:, 1])
    
     month_idx = df_loc.index.month.to_numpy()
     for m in range(1, 13):
@@ -44,12 +44,12 @@ for loc, df_loc in df_weather.groupby("locationID"):
         std = y[idx].std(axis=0)
 
         models[loc]["weather"]["monthly_mean"][m] = {
-            "Speed": mu[0],
-            "Height": mu[1]
+            "speed": mu[0],
+            "height": mu[1]
         }
         models[loc]["weather"]["monthly_std"][m] = {
-            "Speed": std[0],
-            "Height": std[1]
+            "speed": std[0],
+            "height": std[1]
         }
 
         y[idx] = (y[idx] - mu) / std 
