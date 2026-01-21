@@ -7,8 +7,8 @@ models = {
         "weather": {
             "model": "VARResults_object_here",   # statsmodels VARResults
             "boxcox": {
-                "Speed": 0.18, 
-                "Height": 0.32
+                "speed": 0.18, 
+                "height": 0.32
             },
             "monthly_mean": {
                 m: np.array([8.5, 1.6]) for m in range(12)
