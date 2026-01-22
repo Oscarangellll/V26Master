@@ -18,7 +18,7 @@ def gen_powerprices(seed, wdf, electricity_params):
         wdf_month = wdf.loc[mask]
 
         LR_model = electricity_params[month]["model"]
-        sigma = float(electricity_params[month]["sigma"])  # standard deviation of residuals
+        sigma = float(electricity_params[month]["monthly_sigma"])  # standard deviation of residuals
         
         X = wdf_month[["speed"]].to_numpy() # (n,1)
         mu = LR_model.predict(X).reshape(-1) # (n,)

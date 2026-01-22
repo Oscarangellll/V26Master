@@ -7,7 +7,7 @@ from gen_weather import gen_weather
 from gen_failures import gen_failures
 from gen_powerprices import gen_powerprices
 
-def generate_scenarios(num_scenarios, master_seed, scenarios_db, windfarms, wf_to_loc):
+def generate_scenarios(num_scenarios, master_seed, scenarios_db, windfarms, wf_to_loc, maintenance_categories):
     #num_scenarios is a number
     #seed is a number
     #scenarios_db is a read csv using pandas, simply containing a bunch of seeds to choose from
@@ -43,7 +43,7 @@ def generate_scenarios(num_scenarios, master_seed, scenarios_db, windfarms, wf_t
             electricity_rows.append(edf)
             
         for wf in windfarms:
-            fdf = gen_failures(seed_i, wf)
+            fdf = gen_failures(seed_i, wf, maintenance_categories)
             fdf["scenario_id"] = scenario_id  # add scenario_id column
             fdf["seed"] = seed_i  # add seed column
             fdf["windfarm"] = wf  # add windfarm column
@@ -61,3 +61,4 @@ def generate_scenarios(num_scenarios, master_seed, scenarios_db, windfarms, wf_t
     }
         
     return weather_df, electricity_df, failure_df, meta
+
