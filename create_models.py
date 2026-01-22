@@ -43,14 +43,8 @@ for loc, df_loc in df_weather.groupby("locationID"):
         mu = y[idx].mean(axis=0)
         std = y[idx].std(axis=0)
 
-        models[loc]["weather"]["monthly_mean"][m] = {
-            "speed": mu[0],
-            "height": mu[1]
-        }
-        models[loc]["weather"]["monthly_std"][m] = {
-            "speed": std[0],
-            "height": std[1]
-        }
+        models[loc]["weather"]["monthly_mean"][m] = mu 
+        models[loc]["weather"]["monthly_std"][m] = std 
 
         y[idx] = (y[idx] - mu) / std 
     
