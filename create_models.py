@@ -1,18 +1,17 @@
 import pandas as pd
 from scipy.stats import boxcox
-import numpy as np
 from statsmodels.tsa.vector_ar.var_model import VAR
 import statsmodels.api as sm
 import pickle
 
 df_weather = pd.read_csv("data.csv", index_col="time", parse_dates=True)
-df_price = pd.read_csv("electricity_price_data.csv", index_col="time", parse_dates=True)
-df_price = df_price[df_price.index.year >= 2023]
-
+df_price_daily = pd.read_csv("germany_electricity_price_daily_2023_2025.csv", index_col="Date", parse_dates=True)
+df_price_daily = df_price_daily[df_price_daily.index.year >= 2023]
 models = {}
 
 for loc, df_loc in df_weather.groupby("locationID"):
-    df = df_loc[["speed"]].join(df_price, how="inner")
+    df_daily = df_loc.resample("D").mean()
+    df = df_daily[["speed"]].join(df_price_daily, how="inner")
     
     models[loc] = {"electricity": {}}
 
@@ -35,7 +34,7 @@ for loc, df_loc in df_weather.groupby("locationID"):
     
     y[:, 0], models[loc]["weather"]["boxcox"]["speed"] = boxcox(y[:, 0])
     y[:, 1], models[loc]["weather"]["boxcox"]["height"] = boxcox(y[:, 1])
-   
+
     month_idx = df_loc.index.month.to_numpy()
     for m in range(1, 13):
         idx = month_idx == m

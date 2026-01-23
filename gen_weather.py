@@ -25,14 +25,14 @@ def gen_weather(seed, weather_params):
     ################
     # De-standardize
     ################
-    mm = weather_params["monthly_mean"] #array med shape (12,2)
-    ms = weather_params["monthly_std"] #array med shape (12,2)
+    m_mu = weather_params["monthly_mean"] #dict: m: (mean_speed, mean_height) for each month m=1..12
+    m_std = weather_params["monthly_std"] #dict m: (std_speed, std_height) for each month m=1..12
     
     # Vi mapper month -> mean/std ved å slå opp i dict
-    speed_mean  = sd["month"].map(lambda m: mm[m-1][0]).to_numpy()  #OBS: month er 1-indexed i sd. 
-    height_mean = sd["month"].map(lambda m: mm[m-1][1]).to_numpy()  #Så vi må kanskje trekke 1 (gjøres nå)
-    speed_std   = sd["month"].map(lambda m: ms[m-1][0]).to_numpy()  #når vi slår opp i mm og ms. 
-    height_std  = sd["month"].map(lambda m: ms[m-1][1]).to_numpy()  #Verify!
+    speed_mean  = sd["month"].map(lambda m: m_mu[m][0]).to_numpy()  #OBS: month er 1-indexed i sd. 
+    height_mean = sd["month"].map(lambda m: m_mu[m][1]).to_numpy()  #Så vi må kanskje trekke 1 (gjøres nå)
+    speed_std   = sd["month"].map(lambda m: m_std[m][0]).to_numpy()  #når vi slår opp i mm og ms. 
+    height_std  = sd["month"].map(lambda m: m_std[m][1]).to_numpy()  #Verify!
     
     sd["speed_bc"] = sd["speed_z"].to_numpy() * speed_std + speed_mean
     sd["height_bc"] = sd["height_z"].to_numpy() * height_std + height_mean

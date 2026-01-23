@@ -1,7 +1,8 @@
 import numpy as np 
 import pandas as pd
+import statsmodels.api as sm
 
-def gen_powerprices(seed, wdf, electricity_params):
+def gen_powerprices(seed, electricity_params, wdf):
     #electricity_params is a dict with 12 LR models: one per month
     #we must generate power prices based on wind speeds in wdf and the month column in wdf
     edf = pd.DataFrame({
@@ -17,11 +18,13 @@ def gen_powerprices(seed, wdf, electricity_params):
         mask = (edf["month"] == month)
         wdf_month = wdf.loc[mask]
 
-        LR_model = electricity_params[month]["model"]
-        sigma = float(electricity_params[month]["monthly_sigma"])  # standard deviation of residuals
+        LR_model = electricity_params[month]
+        sigma = np.sqrt(LR_model.scale) # std of residuals
+        # float(electricity_params[month]["monthly_sigma"]) 
         
         X = wdf_month[["speed"]].to_numpy() # (n,1)
-        mu = LR_model.predict(X).reshape(-1) # (n,)
+        X = sm.add_constant(X)  # add intercept term
+        mu = LR_model.predict(X) # (n,)
         eps = rng.normal(0.0, sigma, size=mask.sum())
         
         edf.loc[mask, "power_price"] = mu + eps   
