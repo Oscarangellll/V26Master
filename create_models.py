@@ -4,9 +4,47 @@ from statsmodels.tsa.vector_ar.var_model import VAR
 import statsmodels.api as sm
 import pickle
 
-df_weather = pd.read_csv("data.csv", index_col="time", parse_dates=True)
-df_price_daily = pd.read_csv("germany_electricity_price_daily_2023_2025.csv", index_col="Date", parse_dates=True)
-df_price_daily = df_price_daily[df_price_daily.index.year >= 2023]
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load data
+df_weather = pd.read_csv("Data/Weather Data/weather_data_2015_2025.csv", index_col="time", parse_dates=True)
+df_price = pd.read_csv("electricity_price_data.csv", index_col="time", parse_dates=True)
+
+# Filter prices for 2023 onwards
+df_price = df_price[df_price.index.year >= 2023]
+
+# Resample to daily averages
+daily_prices = df_price.resample('D').mean()
+daily_wind = df_weather.resample('D').mean()
+
+# Merge on dates (only keep dates present in both)
+daily_data = pd.merge(daily_prices, daily_wind, left_index=True, right_index=True, how='inner')
+
+# Linear regression: price = a + b * speed
+x = daily_data["speed"].values
+y = daily_data["price"].values
+
+# Fit line using np.polyfit (degree 1)
+b, a = np.polyfit(x, y, 1)  # np.polyfit returns [slope, intercept]
+
+print(f"Linear fit: price = {a:.2f} + {b:.2f} * speed")
+
+# Scatter plot with regression line
+plt.figure(figsize=(12, 6))
+plt.scatter(x, y, alpha=0.6, label='Data')
+plt.plot(x, a + b * x, color='red', label=f'Fit: price = {a:.2f} + {b:.2f}*speed')
+plt.title('Daily Average Power Prices vs Wind Speed (2023 onwards)')
+plt.xlabel('Daily Wind Speed (m/s)')
+plt.ylabel('Daily Average Power Price')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+exit()
+
 models = {}
 
 for loc, df_loc in df_weather.groupby("locationID"):
