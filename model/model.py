@@ -35,20 +35,13 @@ def init_model(
     KREQ = {h.name: h.capacity_requirement for h in vessel_types}
     #First-stage desicion variables
     gamma_ST = model.addVars(H, B, T, vtype=gp.GRB.INTEGER, name="gamma_ST")
-    gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER, ub=0, name="gamma_LT")
+    gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER, name="gamma_LT")
     alpha = model.addVars(((v, b, t) for h in H_M for v in V[h] for b in B for t in T), vtype=gp.GRB.BINARY, name="alpha")
-    
-    model.addConstr(
-        (alpha["SOV1", "Base 1", "Jan"] == 1)
-    )
-    model.addConstr(
-        (alpha["SOV1", "Base 1", "Feb"] == 0)
-    )
-    eta = model.addVars(B, vtype=gp.GRB.BINARY, lb=1, name="eta")
+    eta = model.addVars(B, vtype=gp.GRB.BINARY, name="eta")
     #First-stage objective
-    fs_obj = (gp.quicksum(C_B[b] * eta[b] for b in B) 
-            + gp.quicksum(C_ST[h, t] * gamma_ST[h, b, t] for b in B for h in H for t in T) 
-            + gp.quicksum(C_LT[h] * gamma_LT[h, b] for b in B for h in H))
+    fs_obj = (gp.quicksum(C_B[b] * eta[b] for b in B) # base costs
+            + gp.quicksum(C_ST[h, t] * gamma_ST[h, b, t] for b in B for h in H for t in T) # ST charter costs
+            + gp.quicksum(C_LT[h] * gamma_LT[h, b] for b in B for h in H)) # LT charter costs
     #First-stage constraints
     model.addConstrs(
         (gp.quicksum(KREQ[h] * (gamma_ST[h, b, t] + gamma_LT[h, b]) for h in H) <= KMAX[b] * eta[b]
@@ -93,7 +86,7 @@ def init_model(
     P = pattern_library
     C_D = downtime_cost_scenarios
     C_RT = {(h.name, b.name, w.name): 2*haversine((b.latitude, b.longitude), (w.latitude, w.longitude)) * h.travel_cost_per_km for h in vessel_types if h.name in H_S for b in bases for w in windfarms}
-    C_T = {(h.name, i.name, j.name): 2*haversine((i.latitude, i.longitude), (j.latitude, j.longitude)) * h.travel_cost_per_km for h in vessel_types if h.name in H_M for i in bases + windfarms for j in bases + windfarms if i != j}
+    C_T = {(h.name, i.name, j.name): haversine((i.latitude, i.longitude), (j.latitude, j.longitude)) * h.travel_cost_per_km for h in vessel_types if h.name in H_M for i in bases + windfarms for j in bases + windfarms if i != j}
     R = {h.name: h.periodic_return for h in vessel_types if h.name in H_M}
     #Second-stage variables
     x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER, name="x")
@@ -120,20 +113,20 @@ def init_model(
         name="f"
     )
     r_S = model.addVars(
-        ((v, i, d, s) for h in H_M for v in V[h] for i in L for d in D_T for s in S),
+        ((v, b, d, s) for h in H_M for v in V[h] for b in B for d in D_T for s in S),
         vtype=gp.GRB.BINARY,
         name="r_S"
     )
     r_E = model.addVars(
-        ((v, i, d, s) for h in H_M for v in V[h] for i in L for d in D_T for s in S),
+        ((v, b, d, s) for h in H_M for v in V[h] for b in B for d in D_T for s in S),
         vtype=gp.GRB.BINARY,
         name="r_E"
     )
     # Second-stage objective
     sec_obj = (
-        gp.quicksum(C_D[w, d, s] * b[w, m, d, s] for w in W for m in M for d in D for s in S) + 
-        gp.quicksum(C_RT[h, b, w] * x[h, b, w, d, s] for h in H_S for b in B for w in W for d in D for s in S) + 
-        gp.quicksum(C_T[h, i, j] * f[v, i, j, d, s] for h in H_M for v in V[h] for i in L for j in L if i != j for d in D for s in S)
+        gp.quicksum(C_D[w, d, s] * b[w, m, d, s] for w in W for m in M for d in D for s in S) + # downtime costs
+        gp.quicksum(C_RT[h, b, w] * x[h, b, w, d, s] for h in H_S for b in B for w in W for d in D for s in S) + # travel cost singleday vessels
+        gp.quicksum(C_T[h, i, j] * f[v, i, j, d, s] for h in H_M for v in V[h] for i in L for j in L if i != j for d in D for s in S) #travel cost multiday vessels
     ) / len(S)
     # Second-stage constraints
     model.addConstrs(
@@ -229,26 +222,35 @@ def init_model(
         for s in S),
         name="init_backlog"
     )
-    # model.addConstrs(
-    #     (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-1, s] for j in L if i!=j) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
-    #     for h in H_M
-    #     for v in V[h]
-    #     for i in L
-    #     for d in D if d!=1 and d not in D_T
-    #     for s in S),
-    #     name="flow"
-    # )
-    # model.addConstrs(
-    #     (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-1, s] for j in L if i!=j) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
-    #     for h in H_M
-    #     for v in V[h]
-    #     for i in L
-    #     for d in D if d in D_T
-    #     for s in S),
-    #     name="flow_transition"
-    # )
     model.addConstrs(
-        (gp.quicksum(r_S[v, i, d, s] for i in L) <= gp.quicksum(alpha[v, b, T[t]] for b in B)
+        (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-1, s] for j in L if i!=j) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
+        for h in H_M
+        for v in V[h]
+        for i in L
+        for d in D if d!=1 and d not in D_T
+        for s in S),
+        name="flow"
+    )
+    model.addConstrs(
+        (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-1, s] for j in L if w!=j) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
+        for h in H_M
+        for v in V[h]
+        for w in W
+        for d in D if d in D_T
+        for s in S),
+        name="flow_transition_windfarm"
+    )
+    model.addConstrs(
+        (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-1, s] for j in L if b!=j) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
+        for h in H_M
+        for v in V[h]
+        for b in B
+        for d in D if d in D_T
+        for s in S),
+        name="flow_transition_base"
+    )
+    model.addConstrs(
+        (gp.quicksum(r_S[v, b, d, s] for b in B) <= gp.quicksum(alpha[v, b, T[t]] for b in B)
         for h in H_M 
         for v in V[h] 
         for t in range(1, len(T))
@@ -257,7 +259,7 @@ def init_model(
         name="ST_START_transition1"
     )
     model.addConstrs(
-        (gp.quicksum(r_S[v, i, d, s] for i in L) <= 1 - gp.quicksum(alpha[v, b, T[t-1]] for b in B)
+        (gp.quicksum(r_S[v, b, d, s] for b in B) <= 1 - gp.quicksum(alpha[v, b, T[t-1]] for b in B)
         for h in H_M 
         for v in V[h] 
         for t in range(1, len(T))
@@ -266,7 +268,7 @@ def init_model(
         name="ST_START_transition2"
     )
     model.addConstrs(
-        (gp.quicksum(r_E[v, i, d, s] for i in L) <= gp.quicksum(alpha[v, b, T[t-1]] for b in B)
+        (gp.quicksum(r_E[v, b, d, s] for b in B) <= gp.quicksum(alpha[v, b, T[t-1]] for b in B)
         for h in H_M 
         for v in V[h] 
         for t in range(1, len(T))
@@ -275,7 +277,7 @@ def init_model(
         name="ST_END_transition1"
     )
     model.addConstrs(
-        (gp.quicksum(r_E[v, i, d, s] for i in L) <= 1 - gp.quicksum(alpha[v, b, T[t]] for b in B)
+        (gp.quicksum(r_E[v, b, d, s] for b in B) <= 1 - gp.quicksum(alpha[v, b, T[t]] for b in B)
         for h in H_M 
         for v in V[h] 
         for t in range(1, len(T))
@@ -300,14 +302,6 @@ def init_model(
         for d in D_T
         for s in S),
         name="ST_END_base"
-    )
-    model.addConstrs(
-        (gp.quicksum(r_S[v, w, d, s] + r_E[v, w, d, s] for w in W) == 0
-        for h in H_M
-        for v in V[h]
-        for d in D_T
-        for s in S),
-        name="only_transition_in_base"
     )
     #set objective
     model.setObjective(fs_obj + sec_obj)
