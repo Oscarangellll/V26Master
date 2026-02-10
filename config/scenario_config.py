@@ -22,10 +22,18 @@ class ScenarioConfig:
 
         K, P, KS_hbwds, KM_hwds = gen_patterns(self.weather, case, scenarios)
         
+        self.weather = {"locationID"}
+        for w in windfarms:
+            self.weather[w.locationiD] = weather_model.simulate(w.loationID, seed)
 
     def make_singleday_pattern_set(self):
         K = {}
-
+        
+        for s in scenarios:
+            for w in self.case.wind_farms:
+                weather = weathermodel.simulate(location id, seed=s,
+                
+                weather_windows
         for h in self.case.vessel_types:
             if not h.multiday:
                 for b in self.case.bases:

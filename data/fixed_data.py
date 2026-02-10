@@ -26,7 +26,7 @@ class WindFarm:
     ISO3: str
     n_turbines: int
     weather_location_id: int
-    
+
 @dataclass
 class WeatherLocation:
     weather_location_id: int
@@ -74,7 +74,7 @@ class FixedData:
             WindFarm("A",
                 lat=53.95,
                 lon=6.65,
-                ISO3="GBR",
+                ISO3="DEU",
                 n_turbines=100,
                 weather_location_id=1,
             ),
@@ -83,12 +83,13 @@ class FixedData:
                 lon=8.14,
                 ISO3="DEU",
                 n_turbines=150,
-                weather_location_id=1,
+                weather_location_id=2,
             )
         ]
-        
+	
         self.weather_locations = [
-            WeatherLocation(1, lat=54, lon=6.65)
+            WeatherLocation(1, lat=54, lon=6.65),
+            WeatherLocation(2, lat=55, lon=5.65)
         ]
 
         self.bases = [
@@ -113,9 +114,4 @@ class FixedData:
                 vessel_types=["CTV", "SOV"]
             )
         ]
-
-
-        #self.pattern
-
-        #self.vessels
 
