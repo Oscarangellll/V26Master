@@ -1,27 +1,15 @@
-import os
-from dataclasses import dataclass
-import pickle
-
 import numpy as np
 import pandas as pd
 
-@dataclass
-class _LocationPriceModel:
-    # OLS parameters per month
-    B: np.ndarray # shape: (12, 2)
-    sigma: np.ndarray # shape: (12,)
-
 class PriceModel:
-    def __init__(self):
-        self._models = {}
+    def __init__(self, case):
+        self.case = case
 
-        if os.path.exists("models/price.pkl"):
-            with open("models/price.pkl", "rb") as f:
-                self._models = pickle.load(f)
-        else:
-            self._fit()
-            with open("models/price.pkl", "wb") as f:
-                pickle.dump(self._models, f)
+        self._models = {}
+        
+        self._fit()
+
+
 
     def _fit(self):
         df_weather = pd.read_csv(
@@ -35,58 +23,71 @@ class PriceModel:
             index_col="date", 
             parse_dates=True
         )
+
+        for iso3, weather_locatin_ids in self.case.ISO_Codes.items():
+
+            df_iso3 = df_price[df_price["ISO3"] == iso3]
+
+            df_weather_iso = (
+                df_weather[df_weather["weather_location_id"].isin(weather_location_ids)]
+                .groupby("weather_location_id")[["speed"]]
+                .resample("D")
+                .mean()
+                .groupby(level="time")
+                .mean()
+            )
+
+            df = df_iso3.join(df_weather_iso, how="inner")
             
-        for locID, df_price_loc in df_price.groupby("locationID"):
-            df_weather_loc = df_weather[df_weather["locationID"] == locID]
-            df_weather_loc = df_weather_loc[["speed", "height"]].resample("D").mean()
+            month_of_obs = df.index.month.to_numpy() - 1
 
-            df_loc = df_price_loc.join(df_weather_loc, how="inner")
+            y = df["price"].to_numpy(copy=True)
 
-            month_of_obs = df_loc.index.month.to_numpy()
-
-            y = df_loc["price"].to_numpy()
-
-            X = np.empty((len(df_loc), 2))
-            X[:, 0] = np.ones(len(df_loc))
-            X[:, 1] = df_loc["speed"].to_numpy()
+            X = np.empty((len(df), 2))
+            X[:, 0] = np.ones(len(df))
+            X[:, 1] = df["speed"].to_numpy(copy=True)
             
             B = np.empty((12, 2))
             sigma = np.empty(12)
                 
-            for m in range(1, 13):
+            for m in range(12):
                 idx = month_of_obs == m
 
                 #B[m - 1] = np.linalg.inv(X[idx].T @ X[idx]) @ (X[idx].T @ y[idx])
-                B[m - 1], sum_sq_res, *_ = np.linalg.lstsq(X[idx], y[idx])
+                B[m], sum_sq_res, *_ = np.linalg.lstsq(X[idx], y[idx])
 
-                sigma[m - 1] = sum_sq_res[0] / (np.count_nonzero(idx) - 2)
+                sigma[m] = sum_sq_res[0] / (np.count_nonzero(idx) - 2)
             
-            self._models[locID] = _LocationPriceModel(B, sigma)
+            self._models[iso3] = {"B": B, "sigma": sigma} 
+   
     
-    def simulate(self, speed, locID, seed):
-        assert len(speed) == (24 * 30 * 12)
+    def simulate(self, speed, iso3, seed, months, days_per_month):
         rng = np.random.default_rng(seed)
-        
-        speed = speed.reshape(30 * 12, 24).mean(axis=1)
 
-        months = np.repeat(np.arange(1, 13), 30)
+        model = self._models[iso3]
         
-        y_sim = np.empty(30 * 12)
+        months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
+        month_of_sim = np.repeat(months, days_per_month)
+        
+        T = len(month_of_sim)
+        y_sim = np.empty(T)
 
-        X = np.empty((30 * 12, 2))
-        X[:, 0] = np.ones(30 * 12)
+        X = np.empty((T, 2))
+        X[:, 0] = np.ones(T)
         X[:, 1] = speed
 
-        B = self._models[locID].B
-        sigma = self._models[locID].sigma
+        B = model["B"]
+        sigma = model["sigma"]
 
-        for m in range(1, 13):
-            idx = months == m
+        for m in range(12):
+            idx = month_of_sim == m
             
-            eps = rng.normal(scale=np.sqrt(sigma[m - 1]), size=30)
-            y_sim[idx] = X[idx] @ B[m - 1] + eps 
+            eps = rng.normal(scale=np.sqrt(sigma[m]), size=np.count_nonzero(idx))
+            y_sim[idx] = X[idx] @ B[m] + eps 
         
         return y_sim
 
 
+model = PriceModel()
 
+print(model.simulate(np.ones(10), "DEU", 2, ["Jan"], 10))

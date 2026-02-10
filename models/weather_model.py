@@ -6,8 +6,8 @@ import numpy as np
 
 class WeatherModel:
     def __init__(self):
-        self.rs = 0.5
-        self.rh = 0.2 
+        self.rs = 0.8
+        self.rh = 0.4 
         
         self.data = pd.read_csv(
             "data/weather/2015_2025.csv",
@@ -31,11 +31,11 @@ class WeatherModel:
 
     def _fit(self):
 
-        for w_name, df_w in self.data.groupby("wind_farm"):
-            y = df_w[["speed", "height"]].to_numpy(copy=True)
+        for l_id, df_l in self.data.groupby("weather_location_id"):
+            y = df_l[["speed", "height"]].to_numpy(copy=True)
             T, K = y.shape
 
-            month_of_obs = df_w.index.month.to_numpy() - 1
+            month_of_obs = df_l.index.month.to_numpy() - 1
                         
             monthly_mean = np.zeros((12, K))
             monthly_std  = np.zeros((12, K))
@@ -74,7 +74,7 @@ class WeatherModel:
             row_sums[row_sums == 0] = 1
             P /= row_sums
 
-            self._models[w_name] = {
+            self._models[l_id] = {
                 "monthly_mean": monthly_mean,
                 "monthly_std": monthly_std,
                 "bins": bins,
@@ -84,17 +84,17 @@ class WeatherModel:
                 "P": P,
             }
 
-    def simulate(self, w_name, seed, mode="synthetic", months=None, days_per_month=None):
+    def simulate(self, l_id, seed, mode="synthetic", months=None, days_per_month=None):
         rng = np.random.default_rng(seed=seed)
 
-        model = self._models[w_name]
+        model = self._models[l_id]
 
         if mode == "synthetic":
             months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
             month_of_sim = np.repeat(months, 24 * days_per_month)
         elif mode == "historical":
-            df_w = self.data[self.data["wind_farm"] == w_name]
-            month_of_sim = df_w.index.month.to_numpy() - 1
+            df_l = self.data[self.data["weather_location_id"] == l_id]
+            month_of_sim = df_l.index.month.to_numpy() - 1
 
         T, K = len(month_of_sim), 2
 
