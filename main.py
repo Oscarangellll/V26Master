@@ -1,8 +1,8 @@
 import argparse
 
-from case_config import CaseConfig
-from scenario_config import ScenarioConfig
-from optimization_model import OptimizationModel
+from config.case_config import CaseConfig
+from config.scenario_config import ScenarioConfig
+from model.optimization_model import OptimizationModel
 
 parser = argparse.ArgumentParser()
 
@@ -31,7 +31,6 @@ if args.method == "mip":
     model.optimize()
     
     for (h, b, t), var in model.gamma_ST.items():
-        print("printin")
         if var.X > 0:
             print(f"{h}{b}{t}")
 

@@ -9,6 +9,7 @@ class VesselType:
     mob_rate: float 
     n_teams: int
     periodic_return: int | None = None
+    travel_speed: float
 
     def cost_ST(self, days):
         return self.day_rate * days + self.mob_rate 
@@ -24,6 +25,13 @@ class WindFarm:
     lon: float
     ISO3: str
     n_turbines: int
+    weather_location_id: int
+    
+@dataclass
+class WeatherLocation:
+    weather_location_id: int
+    lat: float
+    lon: float
 
 @dataclass
 class Base:
@@ -38,7 +46,7 @@ class MaintenanceCategory:
     name: str
     failure_rate: float # per year
     duration: float # in hours
-    vessel_types: [str] 
+    vessel_types: list[str] 
 
 class FixedData:
     def __init__(self):
@@ -48,7 +56,8 @@ class FixedData:
                 multiday = False,
                 day_rate=10,
                 mob_rate=200,
-                n_teams=3
+                n_teams=3,
+                travel_speed=35,
             ),
             VesselType("SOV", 
                 required_capacity=5,
@@ -57,6 +66,7 @@ class FixedData:
                 mob_rate=300,
                 n_teams=6,
                 periodic_return=13,
+                travel_speed=20,
             )
         ]
 
@@ -66,13 +76,19 @@ class FixedData:
                 lon=6.65,
                 ISO3="GBR",
                 n_turbines=100,
+                weather_location_id=1,
             ),
             WindFarm("B",
                 lat=53.93, 
                 lon=8.14,
                 ISO3="DEU",
                 n_turbines=150,
+                weather_location_id=1,
             )
+        ]
+        
+        self.weather_locations = [
+            WeatherLocation(1, lat=54, lon=6.65)
         ]
 
         self.bases = [
