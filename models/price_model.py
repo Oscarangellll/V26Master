@@ -24,7 +24,7 @@ class PriceModel:
             parse_dates=True
         )
 
-        for iso3, weather_locatin_ids in self.case.ISO_Codes.items():
+        for iso3, weather_location_ids in self.case.ISO_Codes.items():
 
             df_iso3 = df_price[df_price["ISO3"] == iso3]
 
@@ -59,10 +59,9 @@ class PriceModel:
                 sigma[m] = sum_sq_res[0] / (np.count_nonzero(idx) - 2)
             
             self._models[iso3] = {"B": B, "sigma": sigma} 
-   
     
-    def simulate(self, speed, iso3, seed, months, days_per_month):
-        rng = np.random.default_rng(seed)
+    def simulate(self, s, iso3, iso3_wind_speeds, months, days_per_month):
+        rng = np.random.default_rng(s)
 
         model = self._models[iso3]
         
@@ -71,10 +70,10 @@ class PriceModel:
         
         T = len(month_of_sim)
         y_sim = np.empty(T)
-
-        X = np.empty((T, 2))
+        n_locations = iso3_wind_speeds.shape[1]
+        X = np.empty((T, n_locations + 1))
         X[:, 0] = np.ones(T)
-        X[:, 1] = speed
+        X[:, 1:] = iso3_wind_speeds
 
         B = model["B"]
         sigma = model["sigma"]
@@ -89,5 +88,3 @@ class PriceModel:
 
 
 model = PriceModel()
-
-print(model.simulate(np.ones(10), "DEU", 2, ["Jan"], 10))

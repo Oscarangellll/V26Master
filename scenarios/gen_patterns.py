@@ -210,3 +210,6 @@ KS_hbwds, KM_hwds = remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names)
 print("\n=== AFTER remove_dominated_patterns ===")
 print("KS_hbwds:", KS_hbwds)
 print("KM_hwds:", KM_hwds)
+
+
+print(f"travel time: {haversine((56.97, -1.82), (54.03, 8.19), unit=Unit.KILOMETERS) / 20:.2f} hours")

@@ -1,22 +1,31 @@
 import numpy as np
-from scenarios.gen_patterns import gen_patterns
+# from scenarios.gen_patterns import gen_patterns
 
 class ScenarioConfig:
 
     def __init__(self, case, weather_model, price_model, scenarios: list[int]):
         self.case = case
         self.scenarios = scenarios
-        self.weather = {(s, loc) for s in scenarios for loc in case.locations}
+        self.weather = {(s, iso3, loc) for s in scenarios for iso3 in case.ISO_codes.keys() for loc in case.ISO_codes[iso3]}
         self.prices = {(s, iso3) for s in scenarios for iso3 in case.ISO_codes.keys()}
         
         for s in scenarios:
-            for loc in case.locations:
-                self.weather[(s, loc)] = weather_model.simulate(s, loc)
             for iso3 in case.ISO_codes.keys():
+                for loc in case.ISO_codes[iso3]:
+                    self.weather[(s, iso3, loc)] = weather_model.simulate(s, loc)
+                #want to simulate prices based on weather at all locations in the iso3 code
+                #make an ndarray of shape (n_hours, n_locations) to pass to price model
+                iso3_wind_speeds = np.array([self.weather[s, iso3, loc][:0] for loc in case.ISO_codes[iso3]]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_days)
+                #make averages per day (24 values per day) to pass to price model
+                iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
+                self.prices[s, iso3] = price_model.simulate(s, iso3, iso3_wind_speeds)
+                
+                    
+                    
                 weather_per_loc = {loc: self.weather[s, loc] for loc in case.ISO_codes[iso3]}
                 for loc in case.ISO_codes[iso3]:
                     n_days = len(weather_per_loc[loc] / self.case.days_per_period)
-                    daily_matrix = weather_per_loc[loc][:]]
+                    daily_matrix = weather_per_loc[loc][:]
                 
                 self.prices[(s, iso3)] = price_model.simulate(speed_averages, iso, periods, seed)
 
@@ -29,11 +38,11 @@ class ScenarioConfig:
     def make_singleday_pattern_set(self):
         K = {}
         
-        for s in scenarios:
-            for w in self.case.wind_farms:
-                weather = weathermodel.simulate(location id, seed=s,
+        # for s in scenarios:
+        #     for w in self.case.wind_farms:
+        #         weather = weathermodel.simulate(location id, seed=s,
                 
-                weather_windows
+        #         weather_windows
         for h in self.case.vessel_types:
             if not h.multiday:
                 for b in self.case.bases:
@@ -85,3 +94,18 @@ class ScenarioConfig:
                     C_D[w.name, d, s] = 200
 
         return C_D
+
+
+s = 1
+iso3 = {"DEU": ["DEU_loc1", "DEU_loc2"]}
+weather = {
+    # wind speeds are random between 10 and 30, wave heights are random between 0 and 5. make for each hour of the year (24 * 365) and for each location in the iso3 code
+    (s, "DEU", "DEU_loc1"): [10 + 20 * np.random.rand(24 * 365), 5 * np.random.rand(24 * 365)],
+    (s, "DEU", "DEU_loc2"): [10 + 20 * np.random.rand(24 * 365), 5 * np.random.rand(24 * 365)],
+}
+iso3_wind_speeds = np.array([weather[s, "DEU", loc][0] for loc in iso3["DEU"]]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_days)
+print(iso3_wind_speeds.shape) #should be (24 * 365, 2)
+print(iso3_wind_speeds[:5]) #print first 5 rows to check values
+iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
+print(iso3_wind_speeds.shape) #should be (365, 2)
+print(iso3_wind_speeds[:5]) #print first 5 rows to check values

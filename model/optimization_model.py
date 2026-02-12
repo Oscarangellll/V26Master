@@ -312,9 +312,18 @@ class OptimizationModel:
             for s in S),
             name="init_backlog"
         )
+        
+        M = {
+            ("A", "B"): 1,
+            ("B", "A"): 1,
+            ("A", "1"): 2,
+            ("1", "A"): 2,
+            ("B", "1"): 1,
+            ("1", "B"): 1,
+        }
 
         model.addConstrs(
-            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-1, s] for j in L if i!=j) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
+            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-M[(i, j)], s] for j in L if (i!=j and d-M[(i, j)]>0)) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
             for h in H_M
             for v in V[h]
             for i in L
@@ -324,7 +333,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-1, s] for j in L if w!=j) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
+            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-M[(w, j)], s] for j in L if (w!=j and d-M[(w, j)]>0)) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
             for h in H_M
             for v in V[h]
             for w in W
@@ -334,7 +343,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-1, s] for j in L if b!=j) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
+            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-M[(b, j)], s] for j in L if (b!=j and d-M[(b, j)]>0)) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
             for h in H_M
             for v in V[h]
             for b in B
@@ -405,13 +414,50 @@ class OptimizationModel:
         
         model.setObjective(first_obj + second_obj)
 
+
+        model.setParam("OutputFlag", 0)
+        model.addConstrs(
+            (gp.quicksum(f[v, i, j, d, s] for j in L if j != i) <= delta[v, i, d, s]
+            for h in H_M
+            for v in V[h]
+            for i in L
+            for d in D
+            for s in S
+            )
+        )
+        model.addConstr(
+            delta["SOV1", "1", 7, 1] == 1
+        )
+        # model.addConstr(
+        #     delta["SOV1", "A", 2, 1] == 0
+        # )
+        model.addConstr(
+            gamma_ST["SOV", "1", "Feb"] == 1
+        )
+        model.optimize()
+        #print active gamma variables
+        for (h, b, t), var in gamma_ST.items():
+            if var.X > 0:
+                print(f"gamma_ST[{h}, {b}, {t}] = {var.X}")
+        for (h, b), var in gamma_LT.items():
+            if var.X > 0:
+                print(f"gamma_LT[{h}, {b}] = {var.X}")
+        # print active f variables
+        for (v, i, j, d, s), var in f.items():
+            if var.X > 0:
+                print(f"f[{v}, {i}, {j}, {d}, {s}] = {var.X}")
+        #print active delta variables
+        for (v, i, d, s), var in delta.items():
+            if var.X > 0:
+                print(f"delta[{v}, {i}, {d}, {s}] = {var.X}")
         model.update()
+        print(F)
         
-        self.model = model
+        # self.model = model
         
-        self.gamma_ST = gamma_ST
+        # self.gamma_ST = gamma_ST
         
 
-    def optimize(self):
-        self.model.optimize()
+    # def optimize(self):
+    #     self.model.optimize()
 

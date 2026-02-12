@@ -8,8 +8,8 @@ class VesselType:
     day_rate: float
     mob_rate: float 
     n_teams: int
-    periodic_return: int | None = None
     travel_speed: float
+    periodic_return: int | None = None
 
     def cost_ST(self, days):
         return self.day_rate * days + self.mob_rate 
@@ -65,8 +65,8 @@ class FixedData:
                 day_rate=30,
                 mob_rate=300,
                 n_teams=6,
-                periodic_return=13,
                 travel_speed=20,
+                periodic_return=13,
             )
         ]
 

@@ -17,22 +17,23 @@ parser.add_argument(
     "-c", "--case",
     required=True,
     help="Path to case config"
- )
+)
 
 args = parser.parse_args()
 
 if args.method == "mip":
     case = CaseConfig(args.case)
     
-    scenario = ScenarioConfig(case, scenarios=[1, 2])
+    scenario = ScenarioConfig(case, scenarios=[1])
 
     model = OptimizationModel(case, scenario)
     model.build_model()
-    model.optimize()
+    # model.model.setParam("OutputFlag", 0)
+    # model.optimize()
     
-    for (h, b, t), var in model.gamma_ST.items():
-        if var.X > 0:
-            print(f"{h}{b}{t}")
+    # for (h, b, t), var in model.gamma_ST.items():
+    #     if var.X > 0:
+    #         print(f"{h}{b}{t}")
 
 elif args.method == "grasp":
     print("grasp")
