@@ -77,7 +77,7 @@ class FixedData:
                 max_wind=30,
                 max_wave=2,
                 shift_length=12,
-                periodic_return=13,
+                periodic_return=14,
             )
         ]
 
@@ -127,8 +127,8 @@ class FixedData:
         ]
         
         power_curve_data = pd.read_csv("data/power_curve.csv")
-        self._speed = power_curve_data["speed"].to_numpy()
-        self._power = power_curve_data["power"].to_numpy()
+        self._speed = power_curve_data["speed"].to_numpy() 
+        self._power = power_curve_data["power"].to_numpy() / 1000
         
         self.upper_bound_weather_window = 15
     

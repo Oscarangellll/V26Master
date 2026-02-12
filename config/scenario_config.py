@@ -12,30 +12,35 @@ class ScenarioConfig:
         self.price_model = price_model
         self.scenarios = scenarios
 
-        self._weather = {}
-        self._prices = {}
+        weather = {}
+        prices = {}
         
         for s in scenarios:
+            rng = np.random.default_rng(seed=s)
             for iso in case.all_wl_ids_for_iso.keys():
-                for wl_id in all_wl_ids_
-                for loc in case.all_wl_ids_for_iso[iso3]:
-                    self.weather[(s, iso3, loc)] = weather_model.simulate(loc, s, case.periods, case.days_per_period)
-                print(sorted(case.all_wl_ids_for_iso[iso3]))
-                iso3_wind_speeds = np.array([self.weather[s, iso3, loc][:,0] for loc in sorted(case.all_wl_ids_for_iso[iso3])]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
+                for loc in case.all_wl_ids_for_iso[iso]:
+                    weather[(s, iso, loc)] = weather_model.simulate(loc, s, rng, case.periods, case.days_per_period)
+                print(sorted(case.all_wl_ids_for_iso[iso]))
+                iso3_wind_speeds = np.array([weather[s, iso, loc][:,0] for loc in sorted(case.all_wl_ids_for_iso[iso])]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
                 iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
-                self.prices[s, iso3] = price_model.simulate(iso3_wind_speeds, iso3, s, case.periods, case.days_per_period)
+                prices[s, iso] = price_model.simulate(iso3_wind_speeds, iso, s, rng, case.periods, case.days_per_period)
                 
-        KS_hbwds, KM_hwds, P = gen_patterns(self.weather, case, scenarios)
-        # downtime_costs = self.make_downtime_costs(self.weather, self.prices)
-        # failures = self.make_failures()
-        print(KS_hbwds)
-        print("------------------------------------")
-        print(KM_hwds)
-        print("------------------------------------")
-        print(P)
-        print("------------------------------------")
-        print(self.prices)
-        print("------------------------------------")
+        self.K_S, self.K_M, self.P = gen_patterns(weather, case, scenarios)
+        self.C_D = self.make_downtime_costs(weather, prices)
+        self.F = self.make_failures()
+        # print("scencon prints:")
+        # print(self.K_S)
+        # print("------------------------------------")
+        # print(self.K_M)
+        # print("------------------------------------")
+        # print(self.P)
+        # print("------------------------------------")
+        # print(prices)
+        # print("------------------------------------")
+        # print(self.C_D)
+        # print("------------------------------------")
+        # print(self.F)
+        # print("------------------------------------")
         
 
     def make_singleday_pattern_set(self):
@@ -83,21 +88,21 @@ class ScenarioConfig:
 
         return F
 
-    def make_downtime_costs(self):
+    def make_downtime_costs(self, weather, prices):
         C_D = {}
         for w in self.case.wind_farms:
             for s in self.scenarios:
-                sim_speed = self.weather[(s, w.iso, w.weather_location_id)[:, 0]
+                sim_speed = weather[(s, w.iso, w.weather_location_id)][:, 0]
             
                 sim_power_output = self.case.power_curve(sim_speed) 
                 
                 n_days = len(sim_power_output) // 24
                 sim_daily_power = sim_power_output.reshape(n_days, 24).mean(axis=1)
-                
-                sim_downtime_cost = sim_daily_power * self.prices[(s, w.iso)]
+                sim_daily_power *= 24
+                sim_downtime_cost = sim_daily_power * prices[(s, w.iso)]
 
                 for d in self.case.D:
-                    C_D[w.name, d, 1] = sim_downtime_cost[d - 1] 
+                    C_D[w.name, d, s] = sim_downtime_cost[d - 1] 
         
         return C_D
 

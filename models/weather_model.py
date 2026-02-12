@@ -84,9 +84,7 @@ class WeatherModel:
                 "P": P,
             }
 
-    def simulate(self, wl_id, seed, months=None, days_per_month=None):
-        rng = np.random.default_rng(seed=seed)
-
+    def simulate(self, wl_id, seed, rng, months=None, days_per_month=None):
         model = self._models[wl_id]
 
         if months is not None and days_per_month is not None:
@@ -125,14 +123,6 @@ class WeatherModel:
             idx = month_of_sim == m
 
             y_sim[idx] = y_sim[idx] * model["monthly_std"][m] + model["monthly_mean"][m]
-            
-        #plot the simulated weather for the first 24*10 hours to check values
-        import matplotlib.pyplot as plt
-        plt.plot(y_sim[:24*10, 0]) #plot first week of simulated wind speeds
-        plt.title(f"Simulated weather for wl_id {wl_id}, seed {seed}")
-        plt.xlabel("Hour")
-        plt.ylabel("Wind Speed")
-        plt.show()
 
         return y_sim
 

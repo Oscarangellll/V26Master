@@ -67,9 +67,7 @@ class PriceModel:
             self._models[iso] = {"B": B, "sigma": sigma}
    
     
-    def simulate(self, speed, iso, seed, months, days_per_month):
-        rng = np.random.default_rng(seed)
-
+    def simulate(self, speed, iso, seed, rng, months, days_per_month):
         model = self._models[iso]
         
         months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1

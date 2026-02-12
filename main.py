@@ -29,11 +29,7 @@ if args.method == "mip":
     price_model = PriceModel()
 
     scenario = ScenarioConfig(case, weather_model, price_model, scenarios=[1])
-        
-    down = scenario.make_downtime_costs()
-    print(down)
 
-    exit()
     model = OptimizationModel(case, scenario)
     
     model.build_model()

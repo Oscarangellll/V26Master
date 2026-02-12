@@ -103,15 +103,15 @@ class OptimizationModel:
         D = self.case.D
         D_t = self.case.D_t
         D_T = self.case.D_T
-        K_S = self.scenario.make_singleday_pattern_set() 
-        K_M = self.scenario.make_multiday_pattern_set() 
+        K_S = self.scenario.K_S
+        K_M = self.scenario.K_M
         S = self.scenario.scenarios
         
         # Second stage parameters
-        F = self.scenario.make_failures()
+        F = self.scenario.F
         N = self.case.N
-        P = self.case.P
-        C_D = self.scenario.make_downtime_costs()
+        P = self.scenario.P
+        C_D = self.scenario.C_D
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
@@ -415,26 +415,6 @@ class OptimizationModel:
         
         model.setObjective(first_obj + second_obj)
 
-
-        model.setParam("OutputFlag", 0)
-        model.addConstrs(
-            (gp.quicksum(f[v, i, j, d, s] for j in L if j != i) <= delta[v, i, d, s]
-            for h in H_M
-            for v in V[h]
-            for i in L
-            for d in D
-            for s in S
-            )
-        )
-        model.addConstr(
-            delta["SOV1", "1", 7, 1] == 1
-        )
-        # model.addConstr(
-        #     delta["SOV1", "A", 2, 1] == 0
-        # )
-        model.addConstr(
-            gamma_ST["SOV", "1", "Feb"] == 1
-        )
         model.optimize()
         #print active gamma variables
         for (h, b, t), var in gamma_ST.items():
@@ -452,7 +432,6 @@ class OptimizationModel:
             if var.X > 0:
                 print(f"delta[{v}, {i}, {d}, {s}] = {var.X}")
         model.update()
-        print(F)
         
         # self.model = model
         
