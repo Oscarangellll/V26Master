@@ -87,33 +87,21 @@ class ScenarioConfig:
     def make_downtime_costs(self):
         C_D = {}
         for w in self.case.wind_farms:
-            wea = self.weather_model.simulate(
+            sim_speed = self.weather_model.simulate(
                 w.weather_location_id, 
                 1, 
                 self.case.periods, 
                 self.case.days_per_period
-            )
-            # print(wea.shape)
-            # print(self.case.power_curve(wea[:,0]))
+            )[:, 1]
+            print(sim_speed)
             exit()
-            break
+            sim_power_output = self.case.power_curve(sim_speed) 
+            
+            n_days = len(sim_power_output) // 24
+            sim_daily_power = sim_power_output.reshape(n_days, 24).mean(axis=1)
+            
             for d in self.case.D:
-                for s in self.scenarios:
-                    C_D[w.name, d, s] = 200
-
+                C_D[w.name, d, 1] = sim_daily_power[d - 1] 
+        print(C_D)
         return C_D
 
-
-s = 1
-iso3 = {"DEU": ["DEU_loc1", "DEU_loc2"]}
-weather = {
-    # wind speeds are random between 10 and 30, wave heights are random between 0 and 5. make for each hour of the year (24 * 365) and for each location in the iso3 code
-    (s, "DEU", "DEU_loc1"): [10 + 20 * np.random.rand(24 * 365), 5 * np.random.rand(24 * 365)],
-    (s, "DEU", "DEU_loc2"): [10 + 20 * np.random.rand(24 * 365), 5 * np.random.rand(24 * 365)],
-}
-iso3_wind_speeds = np.array([weather[s, "DEU", loc][0] for loc in iso3["DEU"]]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_days)
-print(iso3_wind_speeds.shape) #should be (24 * 365, 2)
-print(iso3_wind_speeds[:5]) #print first 5 rows to check values
-iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
-print(iso3_wind_speeds.shape) #should be (365, 2)
-print(iso3_wind_speeds[:5]) #print first 5 rows to check values

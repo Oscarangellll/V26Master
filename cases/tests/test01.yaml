@@ -6,10 +6,6 @@
 # wind_farms: required, list of wind farms
 # maintenance_categories: optional, list of categories
 
-periods: ["Jan", "Feb"]
-
-days_per_period: 1
-
 vessel_types: ["CTV", "SOV"]
 
 max_multiday_vessels: 1
@@ -18,6 +14,6 @@ bases: ["1"]
 
 periods: ["Jan"]
 
-days_per_period: 10
+days_per_period: 6
 
-wind_farms: ["A", "B"]
+wind_farms: ["A"]
