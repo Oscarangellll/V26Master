@@ -12,13 +12,12 @@ class ScenarioConfig:
         self.price_model = price_model
         self.scenarios = scenarios
 
-        self.case = case
-        self.scenarios = scenarios
-        self.weather = {}
-        self.prices = {}
+        self._weather = {}
+        self._prices = {}
         
         for s in scenarios:
-            for iso3 in case.all_wl_ids_for_iso.keys():
+            for iso in case.all_wl_ids_for_iso.keys():
+                for wl_id in all_wl_ids_
                 for loc in case.all_wl_ids_for_iso[iso3]:
                     self.weather[(s, iso3, loc)] = weather_model.simulate(loc, s, case.periods, case.days_per_period)
                 print(sorted(case.all_wl_ids_for_iso[iso3]))
@@ -87,21 +86,18 @@ class ScenarioConfig:
     def make_downtime_costs(self):
         C_D = {}
         for w in self.case.wind_farms:
-            sim_speed = self.weather_model.simulate(
-                w.weather_location_id, 
-                1, 
-                self.case.periods, 
-                self.case.days_per_period
-            )[:, 1]
-            print(sim_speed)
-            exit()
-            sim_power_output = self.case.power_curve(sim_speed) 
+            for s in self.scenarios:
+                sim_speed = self.weather[(s, w.iso, w.weather_location_id)[:, 0]
             
-            n_days = len(sim_power_output) // 24
-            sim_daily_power = sim_power_output.reshape(n_days, 24).mean(axis=1)
-            
-            for d in self.case.D:
-                C_D[w.name, d, 1] = sim_daily_power[d - 1] 
-        print(C_D)
+                sim_power_output = self.case.power_curve(sim_speed) 
+                
+                n_days = len(sim_power_output) // 24
+                sim_daily_power = sim_power_output.reshape(n_days, 24).mean(axis=1)
+                
+                sim_downtime_cost = sim_daily_power * self.prices[(s, w.iso)]
+
+                for d in self.case.D:
+                    C_D[w.name, d, 1] = sim_downtime_cost[d - 1] 
+        
         return C_D
 
