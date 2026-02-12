@@ -18,7 +18,7 @@ def _find_window(speed, height, vessel_type):
     max_window = min(max_window, shift_limit)
     return max_window
 
-def find_weather_windows(case, weather: dict):
+def find_weather_windows(case, weather: dict, scenarios: list[int]):
     """
     weather: {(scenario, location): np.ndarray}
     ndarray shape: (T, 2) with columns [speed, height]
@@ -26,9 +26,8 @@ def find_weather_windows(case, weather: dict):
     weather_windows = {}
 
     for w in case.wind_farms:
-        loc = getattr(w, "location", w.name)
-        for s in case.scenarios:
-            arr = weather[(s, loc)]
+        for s in scenarios:
+            arr = weather[(s, w.iso, w.weather_location_id)]
             T = arr.shape[0]
             n_days = T // 24
 

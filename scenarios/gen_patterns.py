@@ -1,10 +1,10 @@
 from typing import Dict, List, Tuple, Optional
 import math
 from dataclasses import dataclass
-from gen_windows import find_weather_windows
+from scenarios.gen_windows import find_weather_windows
 from haversine import haversine, Unit
 
-def gen_patterns(weather, case, data):
+def gen_patterns(weather, case, scenarios):
     mcats = list(case.maintenance_categories)
     m_names = [m.name for m in mcats]
     m_durs = [float(m.duration) for m in mcats]
@@ -26,8 +26,7 @@ def gen_patterns(weather, case, data):
             cur.append(c)
             rec(i+1, rem - c*di, cur, dur + c*di)
             cur.pop()
-    
-    rec(0, float(data.max_capacity), [], 0.0)
+    rec(0, float(case.upper_bound_weather_window), [], 0.0)
     
     L: Dict[int, float] = {k: durations[k] for k in range(len(patterns))}
     P: Dict[Tuple[str, int], int] = {}
@@ -41,24 +40,24 @@ def gen_patterns(weather, case, data):
             if all(h.name in mcats[i].vessel_types for i in active_idx):
                 K[h.name].append(k)
     
-    KS_hbwds, KM_hwds = remove_inf_patterns(K, L, weather, case) 
+    KS_hbwds, KM_hwds = remove_inf_patterns(K, L, weather, case, scenarios)
     KS_hbwds, KM_hwds = remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names)
     
-    return K, P, KS_hbwds, KM_hwds
+    return KS_hbwds, KM_hwds, P
 
 
-def remove_inf_patterns(K, L, weather, case):
+def remove_inf_patterns(K, L, weather, case, scenarios):
     KS_hbwds = {(h.name, b.name, w.name, d, s): [] 
         for h in case.vessel_types if not h.multiday
         for b in case.bases
         for w in case.wind_farms
         for d in case.D
-        for s in case.scenarios}
+        for s in scenarios}
     KM_hwds = {(h.name, w.name, d, s): [] 
         for h in case.vessel_types if h.multiday
         for w in case.wind_farms 
         for d in case.D
-        for s in case.scenarios}
+        for s in scenarios}
     
     L_RT = {(h.name, b.name, w.name): 
         0 if h.multiday else 
@@ -66,19 +65,19 @@ def remove_inf_patterns(K, L, weather, case):
         for h in case.vessel_types
         for b in case.bases
         for w in case.wind_farms}
-    print("L_RT:", L_RT)
+    # print("L_RT:", L_RT)
 
     for h in case.vessel_types:
         for w in case.wind_farms:
             for d in case.D:
-                for s in case.scenarios:
+                for s in scenarios:
                     if h.multiday:
-                        windows = find_weather_windows(case, weather)[(h.name, w.name, d, s)]
+                        windows = find_weather_windows(case, weather, scenarios)[(h.name, w.name, d, s)]
                         for k in K[h.name]:
                             if L[k] <= windows:
                                 KM_hwds[h.name, w.name, d, s].append(k)
                     else:
-                        windows = find_weather_windows(case, weather)[(h.name, w.name, d, s)]
+                        windows = find_weather_windows(case, weather, scenarios)[(h.name, w.name, d, s)]
                         for b in case.bases:
                             for k in K[h.name]:
                                 if L[k] + L_RT[h.name, b.name, w.name] <= windows:
@@ -114,102 +113,102 @@ def remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names):
 # Test/Sanity Check:
 ####################
 
-@dataclass(frozen=True)
-class MaintCat:
-    name: str
-    duration: float
-    vessel_types: List[str]
+# @dataclass(frozen=True)
+# class MaintCat:
+#     name: str
+#     duration: float
+#     vessel_types: List[str]
 
-@dataclass(frozen=True)
-class VesselType:
-    name: str
-    multiday: bool
-    travel_speed: float
+# @dataclass(frozen=True)
+# class VesselType:
+#     name: str
+#     multiday: bool
+#     travel_speed: float
 
-@dataclass(frozen=True)
-class Base:
-    name: str
-    lat: float
-    lon: float
+# @dataclass(frozen=True)
+# class Base:
+#     name: str
+#     lat: float
+#     lon: float
 
-@dataclass(frozen=True)
-class WindFarm:
-    name: str
-    lat: float
-    lon: float
+# @dataclass(frozen=True)
+# class WindFarm:
+#     name: str
+#     lat: float
+#     lon: float
 
-@dataclass
-class Case:
-    maintenance_categories: List[MaintCat]
-    vessel_types: List[VesselType]
-    bases: List[Base]
-    wind_farms: List[WindFarm]
-    D: List[int]
-    scenarios: List[int]
+# @dataclass
+# class Case:
+#     maintenance_categories: List[MaintCat]
+#     vessel_types: List[VesselType]
+#     bases: List[Base]
+#     wind_farms: List[WindFarm]
+#     D: List[int]
+#     scenarios: List[int]
 
-@dataclass
-class Data:
-    max_capacity: float
+# @dataclass
+# class Data:
+#     max_capacity: float
 
-# --- Minimal case ---
-case = Case(
-    maintenance_categories=[
-        MaintCat(name="A", duration=2, vessel_types=["SOV"]),
-        MaintCat(name="B", duration=3, vessel_types=["SOV"]),
-        MaintCat(name="C", duration=1, vessel_types=["CTV", "SOV"]),
-    ],
-    vessel_types=[
-        VesselType(name="CTV", multiday=False, travel_speed=30),
-        VesselType(name="SOV", multiday=True, travel_speed=30),
-    ],
-    bases=[Base(name="B1", lat=54, lon=54)],
-    wind_farms=[WindFarm(name="W1", lat=53.9, lon=53.9)],
-    D=[0],
-    scenarios=[0],
-)
-data = Data(max_capacity=4)
-weather_windows = None  # ikke brukt i gen_patterns nå
+# # --- Minimal case ---
+# case = Case(
+#     maintenance_categories=[
+#         MaintCat(name="A", duration=2, vessel_types=["SOV"]),
+#         MaintCat(name="B", duration=3, vessel_types=["SOV"]),
+#         MaintCat(name="C", duration=1, vessel_types=["CTV", "SOV"]),
+#     ],
+#     vessel_types=[
+#         VesselType(name="CTV", multiday=False, travel_speed=30),
+#         VesselType(name="SOV", multiday=True, travel_speed=30),
+#     ],
+#     bases=[Base(name="B1", lat=54, lon=54)],
+#     wind_farms=[WindFarm(name="W1", lat=53.9, lon=53.9)],
+#     D=[0],
+#     scenarios=[0],
+# )
+# data = Data(max_capacity=4)
+# weather_windows = None  # ikke brukt i gen_patterns nå
 
-# Override weather windows for test
-def find_weather_windows(_case, _weather):
-    return {
-        (h.name, w.name, d, s): 3
-        for h in _case.vessel_types
-        for w in _case.wind_farms
-        for d in _case.D
-        for s in _case.scenarios
-    }
+# # Override weather windows for test
+# def find_weather_windows(_case, _weather):
+#     return {
+#         (h.name, w.name, d, s): 3
+#         for h in _case.vessel_types
+#         for w in _case.wind_farms
+#         for d in _case.D
+#         for s in _case.scenarios
+#     }
 
-K, P, _, _ = gen_patterns(weather_windows, case, data)
+# K, P, _, _ = gen_patterns(weather_windows, case, data)
 
-# finn alle pattern-id-er som faktisk finnes i P
-pattern_ids = sorted({k for (_name, k) in P.keys()})
-m_dur = {m.name: m.duration for m in case.maintenance_categories}
+# # finn alle pattern-id-er som faktisk finnes i P
+# pattern_ids = sorted({k for (_name, k) in P.keys()})
+# m_dur = {m.name: m.duration for m in case.maintenance_categories}
 
-print("=== K ===")
-print(K)
+# print("=== K ===")
+# print(K)
 
-print("\n=== P and L ===")
-for k in pattern_ids:
-    a = P[("A", k)]
-    b = P[("B", k)]
-    c = P[("C", k)]
-    Lk = a * m_dur["A"] + b * m_dur["B"] + c * m_dur["C"]
-    print(f"pattern {k}: A={a}, B={b}, C={c}, L={Lk}")
+# print("\n=== P and L ===")
+# for k in pattern_ids:
+#     a = P[("A", k)]
+#     b = P[("B", k)]
+#     c = P[("C", k)]
+#     Lk = a * m_dur["A"] + b * m_dur["B"] + c * m_dur["C"]
+#     print(f"pattern {k}: A={a}, B={b}, C={c}, L={Lk}")
 
-# Recompute L from P for filtering
-L = {k: sum(m_dur[m] * P[(m, k)] for m in m_dur) for k in pattern_ids}
-m_names = [m.name for m in case.maintenance_categories]
+# # Recompute L from P for filtering
+# L = {k: sum(m_dur[m] * P[(m, k)] for m in m_dur) for k in pattern_ids}
+# m_names = [m.name for m in case.maintenance_categories]
 
-KS_hbwds, KM_hwds = remove_inf_patterns(K, L, weather_windows, case)
-print("\n=== AFTER remove_inf_patterns ===")
-print("KS_hbwds:", KS_hbwds)
-print("KM_hwds:", KM_hwds)
+# KS_hbwds, KM_hwds = remove_inf_patterns(K, L, weather_windows, case)
+# print("\n=== AFTER remove_inf_patterns ===")
+# print("KS_hbwds:", KS_hbwds)
+# print("KM_hwds:", KM_hwds)
 
-KS_hbwds, KM_hwds = remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names)
-print("\n=== AFTER remove_dominated_patterns ===")
-print("KS_hbwds:", KS_hbwds)
-print("KM_hwds:", KM_hwds)
+# KS_hbwds, KM_hwds = remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names)
+# print("\n=== AFTER remove_dominated_patterns ===")
+# print("KS_hbwds:", KS_hbwds)
+# print("KM_hwds:", KM_hwds)
 
 
-print(f"travel time: {haversine((56.97, -1.82), (54.03, 8.19), unit=Unit.KILOMETERS) / 20:.2f} hours")
+# print(f"travel time: {haversine((56.97, -1.82), (54.03, 8.19), unit=Unit.KILOMETERS) / 20:.2f} hours")

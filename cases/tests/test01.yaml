@@ -8,9 +8,9 @@
 
 periods: ["Jan", "Feb"]
 
-days_per_period: 6
+days_per_period: 1
 
-vessel_types: ["SOV"]
+vessel_types: ["CTV", "SOV"]
 
 max_multiday_vessels: 1
 

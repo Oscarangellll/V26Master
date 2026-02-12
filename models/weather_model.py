@@ -107,7 +107,7 @@ class WeatherModel:
         P = model["P"]
         for t in range(1, T):
             sim_states[t] = rng.choice(N, p=P[sim_states[t - 1]])
-       
+
         bins = model["bins"]
 
         sim_idx = np.zeros((T, K), dtype=int)
@@ -125,6 +125,14 @@ class WeatherModel:
             idx = month_of_sim == m
 
             y_sim[idx] = y_sim[idx] * model["monthly_std"][m] + model["monthly_mean"][m]
+            
+        #plot the simulated weather for the first 24*10 hours to check values
+        import matplotlib.pyplot as plt
+        plt.plot(y_sim[:24*10, 0]) #plot first week of simulated wind speeds
+        plt.title(f"Simulated weather for wl_id {wl_id}, seed {seed}")
+        plt.xlabel("Hour")
+        plt.ylabel("Wind Speed")
+        plt.show()
 
         return y_sim
 

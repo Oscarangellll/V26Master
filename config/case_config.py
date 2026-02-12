@@ -40,8 +40,8 @@ class CaseConfig:
             if w.name in case["wind_farms"]
         ]
         
-        self.wl_ids_for_iso = {
-            iso: list({w.weather_location_id for w in self.wind_farms if w.iso == iso})
+        self.all_wl_ids_for_iso = {
+            iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
             for iso in list({w.iso for w in self.wind_farms})
         }
         
@@ -55,6 +55,8 @@ class CaseConfig:
             self.maintenance_categories = data.maintenance_categories
 
         self.power_curve = data.power_curve
+        
+        self.upper_bound_weather_window = data.upper_bound_weather_window
 
     # First stage sets
     @property

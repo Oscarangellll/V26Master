@@ -12,6 +12,9 @@ class VesselType:
     mob_rate: float 
     n_teams: int
     travel_speed: float
+    max_wind: float
+    max_wave: float
+    shift_length: int = 12
     periodic_return: int | None = None
 
     def cost_ST(self, days):
@@ -60,6 +63,9 @@ class FixedData:
                 mob_rate=200,
                 n_teams=3,
                 travel_speed=35,
+                max_wind=25,
+                max_wave=1.5,
+                shift_length=12
             ),
             VesselType("SOV", 
                 required_capacity=5,
@@ -68,6 +74,9 @@ class FixedData:
                 mob_rate=300,
                 n_teams=6,
                 travel_speed=20,
+                max_wind=30,
+                max_wave=2,
+                shift_length=12,
                 periodic_return=13,
             )
         ]
@@ -112,7 +121,7 @@ class FixedData:
         self.maintenance_categories = [
             MaintenanceCategory("Annual Service", 
                 failure_rate=0.2,
-                duration=5,
+                duration=3,
                 vessel_types=["CTV", "SOV"]
             )
         ]
@@ -120,6 +129,8 @@ class FixedData:
         power_curve_data = pd.read_csv("data/power_curve.csv")
         self._speed = power_curve_data["speed"].to_numpy()
         self._power = power_curve_data["power"].to_numpy()
+        
+        self.upper_bound_weather_window = 15
     
     def power_curve(self, speed):
         return np.interp(
