@@ -39,9 +39,16 @@ class CaseConfig:
             for w in data.wind_farms 
             if w.name in case["wind_farms"]
         ]
-        
+
+        """
         self.wl_ids_for_iso = {
             iso: list({w.weather_location_id for w in self.wind_farms if w.iso == iso})
+            for iso in list({w.iso for w in self.wind_farms})
+        }
+        """
+        
+        self.all_wl_ids_for_iso = {
+            iso: list(w.weather_location_id for w in data.wind_farms if w.iso == iso}
             for iso in list({w.iso for w in self.wind_farms})
         }
         
