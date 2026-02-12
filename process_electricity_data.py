@@ -4,7 +4,7 @@ from data import FixedData
 
 df = pd.read_csv("data/electricity/original.csv", parse_dates=["Date"])
 
-iso_codes = {w.ISO3 for w in FixedData().wind_farms}
+iso_codes = {w.iso for w in FixedData().wind_farms}
 
 df = df[
     df["Date"].dt.year.isin([2023, 2024, 2025]) &

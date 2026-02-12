@@ -115,6 +115,7 @@ class OptimizationModel:
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
+
         # Second stage variables
         x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER)
 

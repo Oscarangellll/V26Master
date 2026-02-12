@@ -16,4 +16,8 @@ max_multiday_vessels: 1
 
 bases: ["1"]
 
+periods: ["Jan"]
+
+days_per_period: 10
+
 wind_farms: ["A", "B"]

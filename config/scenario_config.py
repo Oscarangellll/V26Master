@@ -1,9 +1,17 @@
 import numpy as np
+
 # from scenarios.gen_patterns import gen_patterns
 
 class ScenarioConfig:
 
     def __init__(self, case, weather_model, price_model, scenarios: list[int]):
+
+        self.case = case        
+        self.weather_model = weather_model
+        self.price_model = price_model
+        self.scenarios = scenarios
+
+        """
         self.case = case
         self.scenarios = scenarios
         self.weather = {(s, iso3, loc) for s in scenarios for iso3 in case.ISO_codes.keys() for loc in case.ISO_codes[iso3]}
@@ -34,15 +42,10 @@ class ScenarioConfig:
         self.weather = {"locationID"}
         for w in windfarms:
             self.weather[w.locationiD] = weather_model.simulate(w.loationID, seed)
-
+        """
     def make_singleday_pattern_set(self):
         K = {}
         
-        # for s in scenarios:
-        #     for w in self.case.wind_farms:
-        #         weather = weathermodel.simulate(location id, seed=s,
-                
-        #         weather_windows
         for h in self.case.vessel_types:
             if not h.multiday:
                 for b in self.case.bases:
@@ -87,8 +90,17 @@ class ScenarioConfig:
 
     def make_downtime_costs(self):
         C_D = {}
-
         for w in self.case.wind_farms:
+            wea = self.weather_model.simulate(
+                w.weather_location_id, 
+                1, 
+                self.case.periods, 
+                self.case.days_per_period
+            )
+            print(wea.shape)
+            print(self.case.power_curve(wea[:,0]))
+            exit()
+            break
             for d in self.case.D:
                 for s in self.scenarios:
                     C_D[w.name, d, s] = 200

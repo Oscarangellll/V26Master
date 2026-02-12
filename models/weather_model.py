@@ -31,11 +31,11 @@ class WeatherModel:
 
     def _fit(self):
 
-        for l_id, df_l in self.data.groupby("weather_location_id"):
-            y = df_l[["speed", "height"]].to_numpy(copy=True)
+        for wl_id, df_wl in self.data.groupby("weather_location_id"):
+            y = df_wl[["speed", "height"]].to_numpy(copy=True)
             T, K = y.shape
 
-            month_of_obs = df_l.index.month.to_numpy() - 1
+            month_of_obs = df_wl.index.month.to_numpy() - 1
                         
             monthly_mean = np.zeros((12, K))
             monthly_std  = np.zeros((12, K))
@@ -74,7 +74,7 @@ class WeatherModel:
             row_sums[row_sums == 0] = 1
             P /= row_sums
 
-            self._models[l_id] = {
+            self._models[wl_id] = {
                 "monthly_mean": monthly_mean,
                 "monthly_std": monthly_std,
                 "bins": bins,
@@ -84,17 +84,17 @@ class WeatherModel:
                 "P": P,
             }
 
-    def simulate(self, l_id, seed, mode="synthetic", months=None, days_per_month=None):
+    def simulate(self, wl_id, seed, months=None, days_per_month=None):
         rng = np.random.default_rng(seed=seed)
 
-        model = self._models[l_id]
+        model = self._models[wl_id]
 
-        if mode == "synthetic":
+        if months is not None and days_per_month is not None:
             months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
             month_of_sim = np.repeat(months, 24 * days_per_month)
-        elif mode == "historical":
-            df_l = self.data[self.data["weather_location_id"] == l_id]
-            month_of_sim = df_l.index.month.to_numpy() - 1
+        else:
+            df_wl = self.data[self.data["weather_location_id"] == wl_id]
+            month_of_sim = df_wl.index.month.to_numpy() - 1
 
         T, K = len(month_of_sim), 2
 

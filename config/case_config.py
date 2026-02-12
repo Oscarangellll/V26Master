@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from pathlib import Path
 import yaml
 
@@ -36,21 +35,15 @@ class CaseConfig:
         self.days_per_period = case.get("days_per_period", 30)
 
         self.wind_farms = [
-            wf 
-            for wf in data.wind_farms 
-            if wf.name in case["wind_farms"]
+            w 
+            for w in data.wind_farms 
+            if w.name in case["wind_farms"]
         ]
         
-        self.locations = list({w.weather_location_id for w in self.wind_farms})
-        
-        self.ISO_codes = {
-            iso: sorted({w.weather_location_id for w in self.wind_farms if w.ISO3 == iso})
-            for iso in sorted({w.ISO3 for w in self.wind_farms})
+        self.wl_ids_for_iso = {
+            iso: list({w.weather_location_id for w in self.wind_farms if w.iso == iso})
+            for iso in list({w.iso for w in self.wind_farms})
         }
-        
-        print(self.locations)
-        print(self.ISO_codes)
-        print(self.ISO_codes["DEU"])
         
         if "maintenance_categories" in case:
             self.maintenance_categories = [
@@ -60,6 +53,8 @@ class CaseConfig:
             ]
         else:
             self.maintenance_categories = data.maintenance_categories
+
+        self.power_curve = data.power_curve
 
     # First stage sets
     @property
@@ -187,7 +182,6 @@ class CaseConfig:
     def R(self):
         return {h.name: h.periodic_return for h in self.vessel_types if h.multiday}
 
-case = CaseConfig("cases/tests/test01.yaml")
 
 
 

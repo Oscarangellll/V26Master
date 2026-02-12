@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+import pandas as pd
+import numpy as np
+
 @dataclass
 class VesselType:
     name: str
@@ -17,19 +20,18 @@ class VesselType:
     def cost_LT(self, days, n_periods):
         return self.day_rate * days * n_periods + self.mob_rate
 
-
 @dataclass
 class WindFarm:
     name: str
     lat: float
     lon: float
-    ISO3: str
     n_turbines: int
+    iso: str
     weather_location_id: int
 
 @dataclass
 class WeatherLocation:
-    weather_location_id: int
+    id: int
     lat: float
     lon: float
 
@@ -74,15 +76,15 @@ class FixedData:
             WindFarm("A",
                 lat=53.95,
                 lon=6.65,
-                ISO3="DEU",
                 n_turbines=100,
+                iso="DEU",
                 weather_location_id=1,
             ),
             WindFarm("B",
                 lat=53.93, 
                 lon=8.14,
-                ISO3="DEU",
                 n_turbines=150,
+                iso="DEU",
                 weather_location_id=2,
             )
         ]
@@ -114,4 +116,19 @@ class FixedData:
                 vessel_types=["CTV", "SOV"]
             )
         ]
+        
+        power_curve_data = pd.read_csv("data/power_curve.csv")
+        self._speed = power_curve_data["speed"].to_numpy()
+        self._power = power_curve_data["power"].to_numpy()
+    
+    def power_curve(self, speed):
+        return np.interp(
+            speed, 
+            self._speed,
+            self._power
+        )
+        
+
+
+d = FixedData()
 

@@ -1,7 +1,8 @@
 import argparse
 
-from config.case_config import CaseConfig
-from config.scenario_config import ScenarioConfig
+from config import CaseConfig, ScenarioConfig
+from models import WeatherModel, PriceModel
+
 from model.optimization_model import OptimizationModel
 
 parser = argparse.ArgumentParser()
@@ -24,9 +25,17 @@ args = parser.parse_args()
 if args.method == "mip":
     case = CaseConfig(args.case)
     
-    scenario = ScenarioConfig(case, scenarios=[1])
+    weather_model = WeatherModel()
+    price_model = PriceModel()
 
+    scenario = ScenarioConfig(case, weather_model, price_model, scenarios=[1, 2])
+        
+    down = scenario.make_downtime_costs()
+    print(down)
+
+    exit()
     model = OptimizationModel(case, scenario)
+    
     model.build_model()
     # model.model.setParam("OutputFlag", 0)
     # model.optimize()
