@@ -1,5 +1,6 @@
 from pathlib import Path
 import yaml
+from haversine import haversine, Unit
 
 from data import FixedData
 
@@ -163,7 +164,7 @@ class CaseConfig:
         for h in self.vessel_types:
             for b in self.bases:
                 for w in self.wind_farms:
-                    C_RT[h.name, b.name, w.name] = 50
+                    C_RT[h.name, b.name, w.name] = 2 * haversine((b.lat, b.lon), (w.lat, w.lon), unit=Unit.KILOMETERS) * h.cost_per_km
 
         return C_RT
 
@@ -176,7 +177,7 @@ class CaseConfig:
                 for i in self.bases + self.wind_farms:
                     for j in self.bases + self.wind_farms:
                         if i != j:
-                            C_T[h.name, i.name, j.name] = 20
+                            C_T[h.name, i.name, j.name] = haversine((i.lat, i.lon), (j.lat, j.lon), unit=Unit.KILOMETERS) * h.cost_per_km
 
         return C_T
 

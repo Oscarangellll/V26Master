@@ -14,6 +14,7 @@ class VesselType:
     travel_speed: float
     max_wind: float
     max_wave: float
+    cost_per_km: float
     shift_length: int = 12
     periodic_return: int | None = None
 
@@ -57,73 +58,109 @@ class FixedData:
     def __init__(self):
         self.vessel_types = [
             VesselType("CTV", 
-                required_capacity=2,
+                required_capacity=1,
                 multiday = False,
-                day_rate=10,
-                mob_rate=200,
+                day_rate=2_940,
+                mob_rate=58_825,
                 n_teams=3,
                 travel_speed=35,
                 max_wind=25,
                 max_wave=1.5,
-                shift_length=12
+                cost_per_km=8,
+                shift_length=10,
             ),
             VesselType("SOV", 
-                required_capacity=5,
+                required_capacity=1,
                 multiday = True,
-                day_rate=30,
-                mob_rate=300,
-                n_teams=6,
+                day_rate=11_765,
+                mob_rate=235_295,
+                n_teams=7,
                 travel_speed=20,
                 max_wind=30,
                 max_wave=2,
+                cost_per_km=10,
                 shift_length=12,
                 periodic_return=14,
             )
         ]
 
         self.wind_farms = [
+            WindFarm("C",
+                lat=54,
+                lon=6.61,
+                n_turbines=100,
+                iso="DEU",
+                weather_location_id=3,
+            ),
+            WindFarm("B",
+                lat=54.23, 
+                lon=7.82,
+                n_turbines=100,
+                iso="DEU",
+                weather_location_id=2,
+            ),
             WindFarm("A",
-                lat=53.95,
-                lon=6.65,
+                lat=55, 
+                lon=7.8,
                 n_turbines=100,
                 iso="DEU",
                 weather_location_id=1,
-            ),
-            WindFarm("B",
-                lat=53.93, 
-                lon=8.14,
-                n_turbines=150,
-                iso="DEU",
-                weather_location_id=2,
             )
         ]
 	
         self.weather_locations = [
-            WeatherLocation(1, lat=54, lon=6.65),
-            WeatherLocation(2, lat=55, lon=5.65)
+            WeatherLocation(1, lat=55.23, lon=7.61),
+            WeatherLocation(2, lat=54.68, lon=7.4),
+            WeatherLocation(3, lat=54.12, lon=6.48)
         ]
 
         self.bases = [
-            Base("1", 
-                lat=40,
-                lon=20,
-                capacity=20,
-                cost=300
+            Base("3", 
+                lat=53.63,
+                lon=7.14,
+                capacity=100,
+                cost=0
             ),
             Base("2", 
-                lat=20,
-                lon=20,
-                capacity=20,
-                cost=400
+                lat=53.87,
+                lon=8.63,
+                capacity=100,
+                cost=0
+            ),
+            Base("1", 
+                lat=54.68,
+                lon=8.74,
+                capacity=100,
+                cost=0
             )
         ]
 
         self.maintenance_categories = [
             MaintenanceCategory("Annual Service", 
-                failure_rate=0.2,
+                failure_rate=5,
+                duration=2,
+                vessel_types=["CTV", "SOV"]
+            ),
+            MaintenanceCategory("Manual Reset", 
+                failure_rate=7.5,
                 duration=3,
                 vessel_types=["CTV", "SOV"]
-            )
+            ),
+            MaintenanceCategory("Minor Repair", 
+                failure_rate=3,
+                duration=7.5,
+                vessel_types=["CTV", "SOV"]
+            ),
+            MaintenanceCategory("Medium Repair", 
+                failure_rate=0.825,
+                duration=7.33,
+                vessel_types=["CTV", "SOV"]
+            ),
+            MaintenanceCategory("Severe Repair", 
+                failure_rate=0.12,
+                duration=8.66,
+                vessel_types=["CTV", "SOV"]
+            ),
         ]
         
         power_curve_data = pd.read_csv("data/power_curve.csv")
