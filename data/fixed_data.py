@@ -177,6 +177,3 @@ class FixedData:
         )
         
 
-
-d = FixedData()
-
