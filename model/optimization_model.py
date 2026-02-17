@@ -418,6 +418,28 @@ class OptimizationModel:
             model.addConstr(
                 gp.quicksum(eta[b] for b in B) <= 1
             )
+            
+        #second stage only:
+        model.addConstr(
+            (eta["1"] == 1)
+        )
+        model.addConstr(
+            (gamma_ST[h, b, t] == 0
+            for h in H
+            for b in B
+            for t in T)
+        )
+        
+        model.addConstr(
+            (gamma_LT["CTV", "1"] == 1)
+        )
+        model.addConstr(
+            (gamma_LT["SOV", "1"] == 2)
+        )
+        model.addConstr(
+            (gamma_LT["CTV", b] == 0
+            for b in ["2", "3"])
+        )
 
         model.update()
         
