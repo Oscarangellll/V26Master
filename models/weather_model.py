@@ -4,34 +4,52 @@ import pickle
 import pandas as pd
 import numpy as np
 
+from data.fixed_data import data
+from data.hashing import *
+
 class WeatherModel:
-    def __init__(self):
-        self.rs = 0.8
-        self.rh = 0.4 
-        
-        self.data = pd.read_csv(
-            "data/weather/2015_2025.csv",
-            index_col="time",
-            parse_dates=True
-        )
+    def __init__(self, resolution_speed=0.8, resolution_height=0.4):
+        self.rs = resolution_speed 
+        self.rh = resolution_height
         
         self._models = {}
-        
-        filename = "weather.pkl"
-        filepath = f"models/{filename}"
 
-        if os.path.exists(filepath):
-            with open(filepath, "rb") as f:
+        model_filehash = hash_weather_model(
+            data.weather_locations,
+            data.weather_from_year,
+            data.weather_to_year,
+            self.rs,
+            self.rh
+        )
+        model_filepath = f"models/{model_filehash}.pkl"
+
+        if os.path.exists(model_filepath):
+            print("Reading weather model from file")
+            with open(model_filepath, "rb") as f:
                 self._models = pickle.load(f)
         else:
+            print("Fitting weather model")
             self._fit()
-            with open(filepath, "wb") as f:
+            with open(model_filepath, "wb") as f:
                 pickle.dump(self._models, f)
         
 
     def _fit(self):
 
-        for wl_id, df_wl in self.data.groupby("weather_location_id"):
+        data_filehash = hash_all_weather_locations(
+            data.weather_locations, 
+            data.weather_from_year, 
+            data.weather_to_year
+        ) 
+        data_filepath = f"data/weather/{data_filehash}.csv"
+        
+        df_weather = pd.read_csv(
+            data_filepath,
+            index_col="time",
+            parse_dates=True
+        )
+
+        for wl_id, df_wl in df_weather.groupby("weather_location_id"):
             y = df_wl[["speed", "height"]].to_numpy(copy=True)
             T, K = y.shape
 
@@ -46,7 +64,7 @@ class WeatherModel:
                 monthly_std[m] = y[idx].std(axis=0)
 
                 y[idx] = (y[idx] - monthly_mean[m]) / monthly_std[m]
-    
+
             bin_width = np.array([self.rs, self.rh]) / monthly_std.mean(axis=0)
             
             bins = []
@@ -84,15 +102,14 @@ class WeatherModel:
                 "P": P,
             }
 
-    def simulate(self, wl_id, seed, rng, months=None, days_per_month=None):
+    def simulate(self, wl_id, rng, months=None, days_per_month=None, month_of_obs=None):
         model = self._models[wl_id]
 
         if months is not None and days_per_month is not None:
             months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
             month_of_sim = np.repeat(months, 24 * days_per_month)
-        else:
-            df_wl = self.data[self.data["weather_location_id"] == wl_id]
-            month_of_sim = df_wl.index.month.to_numpy() - 1
+        elif month_of_obs is not None:
+            month_of_sim = month_of_obs
 
         T, K = len(month_of_sim), 2
 
@@ -117,6 +134,7 @@ class WeatherModel:
         y_sim = np.zeros((T, K))
         for k in range(K):
             i = sim_idx[:, k]
+            
             # y_sim[:, k] = rng.uniform(bins[k][i], bins[k][i + 1])
             y_sim[:, k] = 0.5 * (bins[k][i] + bins[k][i + 1])
 
@@ -124,6 +142,8 @@ class WeatherModel:
             idx = month_of_sim == m
 
             y_sim[idx] = y_sim[idx] * model["monthly_std"][m] + model["monthly_mean"][m]
+        
+        #y_sim = np.maximum(y_sim, 0)
 
         return y_sim
 

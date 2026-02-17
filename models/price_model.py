@@ -1,26 +1,55 @@
+import os
+import pickle
+
 import numpy as np
 import pandas as pd
 
-from data import FixedData
+from data.fixed_data import data
+from data.hashing import *
 
 class PriceModel:
     def __init__(self):
+        
         self._models = {}
         
-        self._fit()
+        iso_codes = {w.iso for w in data.wind_farms}
+        self.filehash = hash_electricity_prices(
+            iso_codes,
+            data.electricity_price_from_year, 
+            data.electricity_price_to_year
+        )
+                            
+        model_filepath = f"models/{self.filehash}.pkl"
+
+        if os.path.exists(model_filepath):
+            print("Reading price model from file")
+            with open(model_filepath, "rb") as f:
+                self._models = pickle.load(f)
+        else:
+            print("Fitting price model")
+            self._fit()
+            with open(model_filepath, "wb") as f:
+                pickle.dump(self._models, f)
+
+
 
     def _fit(self):
-        data = FixedData()
-
+        data_weather_filehash = hash_all_weather_locations(
+            data.weather_locations,
+            data.weather_from_year,
+            data.weather_to_year
+        )
+        data_weather_filepath = f"data/weather/{data_weather_filehash}.csv"
         df_weather = pd.read_csv(
-            "data/weather/2015_2025.csv", 
+            data_weather_filepath,
             index_col="time", 
             usecols=["time", "speed", "weather_location_id"],
             parse_dates=True
         )
         
+        data_price_filepath = f"data/electricity/{self.filehash}.csv"
         df_price = pd.read_csv(
-            "data/electricity/processed.csv", 
+            data_price_filepath, 
             index_col="date", 
             parse_dates=True
         )
@@ -67,11 +96,15 @@ class PriceModel:
             self._models[iso] = {"B": B, "sigma": sigma}
    
     
-    def simulate(self, speed, iso, seed, rng, months, days_per_month):
+    def simulate(self, speed, iso, rng, months=None, days_per_month=None, month_of_obs=None):
         model = self._models[iso]
+
+        if months is not None and days_per_month is not None:
+            months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
+            month_of_sim = np.repeat(months, days_per_month)
+        elif month_of_obs is not None:
+            month_of_sim = month_of_obs
         
-        months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
-        month_of_sim = np.repeat(months, days_per_month)
         
         T = len(month_of_sim)
         y_sim = np.empty(T)

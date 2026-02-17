@@ -54,126 +54,132 @@ class MaintenanceCategory:
     duration: float # in hours
     vessel_types: list[str] 
 
-class FixedData:
+class PowerCurve:
     def __init__(self):
-        self.vessel_types = [
-            VesselType("CTV", 
-                required_capacity=1,
-                multiday = False,
-                day_rate=2_940,
-                mob_rate=58_825,
-                n_teams=3,
-                travel_speed=35,
-                max_wind=25,
-                max_wave=1.5,
-                cost_per_km=8,
-                shift_length=10,
-            ),
-            VesselType("SOV", 
-                required_capacity=1,
-                multiday = True,
-                day_rate=11_765,
-                mob_rate=235_295,
-                n_teams=7,
-                travel_speed=20,
-                max_wind=30,
-                max_wave=2,
-                cost_per_km=10,
-                shift_length=12,
-                periodic_return=14,
-            )
-        ]
+        df = pd.read_csv("data/power_curve.csv")
+        self._speed = df["speed"].to_numpy() 
+        self._power = df["power"].to_numpy() / 1000 # MW
+        
+    def __call__(self, speed): 
+        return np.interp(speed, self._speed, self._power)
 
-        self.wind_farms = [
-            WindFarm("C",
-                lat=54,
-                lon=6.61,
-                n_turbines=100,
-                iso="DEU",
-                weather_location_id=3,
-            ),
-            WindFarm("B",
-                lat=54.23, 
-                lon=7.82,
-                n_turbines=100,
-                iso="DEU",
-                weather_location_id=2,
-            ),
-            WindFarm("A",
-                lat=55, 
-                lon=7.8,
-                n_turbines=100,
-                iso="DEU",
-                weather_location_id=1,
-            )
-        ]
-	
-        self.weather_locations = [
-            WeatherLocation(1, lat=55.23, lon=7.61),
-            WeatherLocation(2, lat=54.68, lon=7.4),
-            WeatherLocation(3, lat=54.12, lon=6.48)
-        ]
+class FixedData:
+    vessel_types = [
+        VesselType("CTV", 
+            required_capacity=1,
+            multiday = False,
+            day_rate=2_940,
+            mob_rate=58_825,
+            n_teams=3,
+            travel_speed=35,
+            max_wind=25,
+            max_wave=1.5,
+            cost_per_km=8,
+            shift_length=10,
+        ),
+        VesselType("SOV", 
+            required_capacity=1,
+            multiday = True,
+            day_rate=11_765,
+            mob_rate=235_295,
+            n_teams=7,
+            travel_speed=20,
+            max_wind=30,
+            max_wave=2,
+            cost_per_km=10,
+            shift_length=12,
+            periodic_return=14,
+        )
+    ]
 
-        self.bases = [
-            Base("3", 
-                lat=53.63,
-                lon=7.14,
-                capacity=100,
-                cost=0
-            ),
-            Base("2", 
-                lat=53.87,
-                lon=8.63,
-                capacity=100,
-                cost=0
-            ),
-            Base("1", 
-                lat=54.68,
-                lon=8.74,
-                capacity=100,
-                cost=0
-            )
-        ]
+    wind_farms = [
+        WindFarm("C",
+            lat=54,
+            lon=6.61,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=3,
+        ),
+        WindFarm("B",
+            lat=54.23, 
+            lon=7.82,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=2,
+        ),
+        WindFarm("A",
+            lat=55, 
+            lon=7.8,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=1,
+        )
+    ]
+    
+    weather_locations = [
+        WeatherLocation(1, lat=55.23, lon=7.61),
+        WeatherLocation(2, lat=54.68, lon=7.4),
+        WeatherLocation(3, lat=54.12, lon=6.48)
+    ]
 
-        self.maintenance_categories = [
-            MaintenanceCategory("Annual Service", 
-                failure_rate=5,
-                duration=2,
-                vessel_types=["CTV", "SOV"]
-            ),
-            MaintenanceCategory("Manual Reset", 
-                failure_rate=7.5,
-                duration=3,
-                vessel_types=["CTV", "SOV"]
-            ),
-            MaintenanceCategory("Minor Repair", 
-                failure_rate=3,
-                duration=7.5,
-                vessel_types=["CTV", "SOV"]
-            ),
-            MaintenanceCategory("Medium Repair", 
-                failure_rate=0.825,
-                duration=7.33,
-                vessel_types=["CTV", "SOV"]
-            ),
-            MaintenanceCategory("Severe Repair", 
+    weather_from_year = 2010
+    weather_to_year = 2025
+
+    bases = [
+        Base("3", 
+            lat=53.63,
+            lon=7.14,
+            capacity=100,
+            cost=0
+        ),
+        Base("2", 
+            lat=53.87,
+            lon=8.63,
+            capacity=100,
+            cost=0
+        ),
+        Base("1", 
+            lat=54.68,
+            lon=8.74,
+            capacity=100,
+            cost=0
+        )
+    ]
+
+    maintenance_categories = [
+        MaintenanceCategory("Annual Service", 
+            failure_rate=5,
+            duration=2,
+            vessel_types=["CTV", "SOV"]
+        ),
+        MaintenanceCategory("Manual Reset", 
+            failure_rate=7.5,
+            duration=3,
+            vessel_types=["CTV", "SOV"]
+        ),
+        MaintenanceCategory("Minor Repair", 
+            failure_rate=3,
+            duration=7.5,
+            vessel_types=["CTV", "SOV"]
+        ),
+        MaintenanceCategory("Medium Repair", 
+            failure_rate=0.825,
+            duration=7.33,
+            vessel_types=["CTV", "SOV"]
+        ),
+        MaintenanceCategory("Severe Repair", 
                 failure_rate=0.12,
                 duration=8.66,
                 vessel_types=["CTV", "SOV"]
             ),
         ]
-        
-        power_curve_data = pd.read_csv("data/power_curve.csv")
-        self._speed = power_curve_data["speed"].to_numpy() 
-        self._power = power_curve_data["power"].to_numpy() / 1000
-        
-        self.upper_bound_weather_window = 15
     
-    def power_curve(self, speed):
-        return np.interp(
-            speed, 
-            self._speed,
-            self._power
-        )
-        
+    power_curve = PowerCurve()
+    
+    electricity_price_from_year = 2023
+    electricity_price_to_year = 2025
 
+    upper_bound_weather_window = 15
+        
+        
+data = FixedData()

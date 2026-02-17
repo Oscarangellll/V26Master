@@ -2,12 +2,11 @@ from pathlib import Path
 import yaml
 from haversine import haversine, Unit
 
-from data import FixedData
+from data.fixed_data import data
 
 class CaseConfig:
 
     def __init__(self, case_path, wind_farm_names=None):
-        data = FixedData()
         case_path = Path(case_path)
         
         with case_path.open() as f:
