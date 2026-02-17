@@ -1,3 +1,6 @@
+import csv
+import os
+from datetime import datetime
 import gurobipy as gp
 
 from config.case_config import CaseConfig
@@ -30,9 +33,9 @@ class OptimizationModel:
         K_REQ = self.case.K_REQ
 
         # First stage variables
-        gamma_ST = model.addVars(H, B, T, vtype=gp.GRB.INTEGER)
+        gamma_ST = model.addVars(H, B, T, ub=self.case.n_vessels_ub, vtype=gp.GRB.INTEGER)
 
-        gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER)
+        gamma_LT = model.addVars(H, B, ub=self.case.n_vessels_ub, vtype=gp.GRB.INTEGER)
 
         alpha = model.addVars(
             ((v, b, t) 
@@ -115,6 +118,7 @@ class OptimizationModel:
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
+        U = {(i, j): 1 for i in L for j in L if i !=j}
 
         # Second stage variables
         x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER)
@@ -313,18 +317,9 @@ class OptimizationModel:
             for s in S),
             name="init_backlog"
         )
-        
-        M = {
-            ("A", "B"): 1,
-            ("B", "A"): 1,
-            ("A", "1"): 2,
-            ("1", "A"): 2,
-            ("B", "1"): 1,
-            ("1", "B"): 1,
-        }
 
         model.addConstrs(
-            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-M[(i, j)], s] for j in L if (i!=j and d-M[(i, j)]>0)) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
+            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-U[(i, j)], s] for j in L if (i!=j and d-U[(i, j)]>0)) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
             for h in H_M
             for v in V[h]
             for i in L
@@ -334,7 +329,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-M[(w, j)], s] for j in L if (w!=j and d-M[(w, j)]>0)) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
+            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-U[(w, j)], s] for j in L if (w!=j and d-U[(w, j)]>0)) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
             for h in H_M
             for v in V[h]
             for w in W
@@ -344,7 +339,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-M[(b, j)], s] for j in L if (b!=j and d-M[(b, j)]>0)) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
+            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-U[(b, j)], s] for j in L if (b!=j and d-U[(b, j)]>0)) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
             for h in H_M
             for v in V[h]
             for b in B
@@ -414,30 +409,114 @@ class OptimizationModel:
         ) 
         
         model.setObjective(first_obj + second_obj)
+        
+        if self.case.one_base:
+            model.addConstr(
+                gp.quicksum(eta[b] for b in B) <= 1
+            )
 
-        model.optimize()
+        model.update()
+        
+        self.model = model
+        
+        self.gamma_ST = gamma_ST
+        self.gamma_LT = gamma_LT
+        self.alpha = alpha
+        self.eta = eta
+        self.x = x
+        self.delta = delta
+        self.lmbd_S = lmbd_S
+        self.lmbd_M = lmbd_M
+        self.z = z
+        self.b = b
+        self.f = f
+        self.r_S = r_S
+        self.r_E = r_E
+        
+
+    def print_variables(self):
         #print active gamma variables
-        for (h, b, t), var in gamma_ST.items():
+        for (h, b, t), var in self.gamma_ST.items():
             if var.X > 0:
                 print(f"gamma_ST[{h}, {b}, {t}] = {var.X}")
-        for (h, b), var in gamma_LT.items():
+        for (h, b), var in self.gamma_LT.items():
             if var.X > 0:
                 print(f"gamma_LT[{h}, {b}] = {var.X}")
         # print active f variables
-        for (v, i, j, d, s), var in f.items():
+        for (v, i, j, d, s), var in self.f.items():
             if var.X > 0:
                 print(f"f[{v}, {i}, {j}, {d}, {s}] = {var.X}")
         #print active delta variables
-        for (v, i, d, s), var in delta.items():
+        for (v, i, d, s), var in self.delta.items():
             if var.X > 0:
                 print(f"delta[{v}, {i}, {d}, {s}] = {var.X}")
-        model.update()
-        
-        # self.model = model
-        
-        # self.gamma_ST = gamma_ST
-        
+                
+    def report_to_csv(self, filename, instance=1, write_header=False):
+        """Save a summary row of the solved model to a CSV file."""
 
-    # def optimize(self):
-    #     self.model.optimize()
+        case = self.case
+        scenario = self.scenario
+        model = self.model
 
+        # --- Case identification ---
+        case_id = (
+            f"W{len(case.W)}_B{len(case.B)}_V{case.max_multiday_vessels}"
+            f"_S{len(scenario.scenarios)}_T{len(case.T)}"
+        )
+
+        # --- Active eta (base decisions) ---
+        active_bases = [b for b in case.B if self.eta[b].X > 0.5]
+
+        # --- Active gamma_LT ---
+        lt_parts = []
+        for (h, b), var in self.gamma_LT.items():
+            if var.X > 0.5:
+                lt_parts.append(f"{h}@{b}:{int(round(var.X))}")
+        gamma_lt_str = ", ".join(lt_parts) if lt_parts else "none"
+
+        # --- Active gamma_ST (per period) ---
+        st_parts = []
+        for t in case.T:
+            period_parts = []
+            for h in case.H:
+                for b in case.B:
+                    val = self.gamma_ST[h, b, t].X
+                    if val > 0.5:
+                        period_parts.append(f"{h}@{b}:{int(round(val))}")
+            if period_parts:
+                st_parts.append(f"{t}|{';'.join(period_parts)}")
+        gamma_st_str = ", ".join(st_parts) if st_parts else "none"
+
+        # --- Build row ---
+        row = {
+            "case_id": case_id,
+            "case_name": str(case.name),
+            "coalition": case.coalition,
+            "n_scenarios": len(scenario.scenarios),
+            "instance": instance,
+            "objective": model.ObjVal if model.SolCount > 0 else None,
+            "mip_gap": model.MIPGap if model.SolCount > 0 else None,
+            "runtime": round(model.Runtime, 2),
+            "n_variables": model.NumVars,
+            "n_constraints": model.NumConstrs,
+            "base_decision": ",".join(active_bases) if active_bases else "none",
+            "gamma_LT_decision": gamma_lt_str,
+            "gamma_ST_decision": gamma_st_str,
+            "wind_farms": ",".join(case.W),
+            "bases": ",".join(case.B),
+            "max_multiday_vessels": case.max_multiday_vessels,
+            "scenario_seeds": ",".join(str(s) for s in scenario.scenarios),
+            "n_periods": len(case.T),
+            "days_per_period": case.days_per_period,
+            "one_base": case.one_base,
+            "n_vessels_ub": case.n_vessels_ub,
+
+        }
+
+        # --- Write (create or append) ---
+        mode = "w" if write_header else "a"
+        with open(filename, mode, newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=row.keys())
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)

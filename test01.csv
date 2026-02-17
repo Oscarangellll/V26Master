@@ -1,0 +1,6 @@
+case_id,case_name,n_scenarios,instance,objective,mip_gap,runtime,n_variables,n_constraints,active_bases,gamma_LT,gamma_ST,wind_farms,bases,max_multiday_vessels,scenario_seeds,n_periods,days_per_period,one_base,n_vessels_ub
+W1_B1_V2_S3_T2,tests\test01,3,1,2070157.4036205339,1.1247001954859476e-16,0.08,1620,1328,1,SOV@1:1,none,A,1,2,"769,560,308",2,10,True,3
+W1_B1_V2_S3_T2,tests\test01,3,2,2371638.620759626,0.0,0.03,1482,1328,1,SOV@1:1,none,A,1,2,"544,314,501",2,10,True,3
+W1_B1_V2_S3_T2,tests\test01,3,3,2134163.5488849226,9.360776421109958e-05,0.02,1497,1328,1,SOV@1:1,none,A,1,2,"90,107,211",2,10,True,3
+W1_B1_V2_S3_T2,tests\test01,3,4,1539311.2269113318,4.7182425656110344e-05,0.03,1677,1328,1,SOV@1:1,none,A,1,2,"155,745,497",2,10,True,3
+W1_B1_V2_S3_T2,tests\test01,3,5,2403590.923653915,1.93735665551543e-16,0.03,1544,1328,1,SOV@1:1,none,A,1,2,"148,813,596",2,10,True,3

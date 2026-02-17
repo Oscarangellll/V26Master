@@ -117,7 +117,8 @@ class WeatherModel:
         y_sim = np.zeros((T, K))
         for k in range(K):
             i = sim_idx[:, k]
-            y_sim[:, k] = rng.uniform(bins[k][i], bins[k][i + 1])
+            # y_sim[:, k] = rng.uniform(bins[k][i], bins[k][i + 1])
+            y_sim[:, k] = 0.5 * (bins[k][i] + bins[k][i + 1])
 
         for m in range(12):
             idx = month_of_sim == m

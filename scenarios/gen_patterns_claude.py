@@ -65,22 +65,23 @@ def remove_inf_patterns(K, L, weather, case, scenarios):
         for h in case.vessel_types
         for b in case.bases
         for w in case.wind_farms}
-    # print("L_RT:", L_RT)
-    
-    windows = find_weather_windows(case, weather, scenarios)
+
+    # Compute weather windows ONCE instead of inside every loop iteration
+    ww = find_weather_windows(case, weather, scenarios)
 
     for h in case.vessel_types:
         for w in case.wind_farms:
             for d in case.D:
                 for s in scenarios:
+                    window = ww[(h.name, w.name, d, s)]
                     if h.multiday:
                         for k in K[h.name]:
-                            if L[k] <= windows[(h.name, w.name, d, s)]:
+                            if L[k] <= window:
                                 KM_hwds[h.name, w.name, d, s].append(k)
                     else:
                         for b in case.bases:
                             for k in K[h.name]:
-                                if L[k] + L_RT[h.name, b.name, w.name] <= windows[(h.name, w.name, d, s)]:
+                                if L[k] + L_RT[h.name, b.name, w.name] <= window:
                                     KS_hbwds[h.name, b.name, w.name, d, s].append(k)
     return KS_hbwds, KM_hwds
 

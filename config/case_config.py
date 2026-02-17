@@ -6,7 +6,7 @@ from data import FixedData
 
 class CaseConfig:
 
-    def __init__(self, case_path):
+    def __init__(self, case_path, wind_farm_names=None):
         data = FixedData()
         case_path = Path(case_path)
         
@@ -35,11 +35,15 @@ class CaseConfig:
 
         self.days_per_period = case.get("days_per_period", 30)
 
+        # Use wind_farm_names override if provided (for coalition analysis),
+        # otherwise use all wind farms from the YAML config
+        wf_filter = wind_farm_names if wind_farm_names is not None else case["wind_farms"]
         self.wind_farms = [
             w 
             for w in data.wind_farms 
-            if w.name in case["wind_farms"]
+            if w.name in wf_filter
         ]
+        self.coalition = "".join(w.name for w in self.wind_farms)
         
         self.all_wl_ids_for_iso = {
             iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
@@ -58,6 +62,10 @@ class CaseConfig:
         self.power_curve = data.power_curve
         
         self.upper_bound_weather_window = data.upper_bound_weather_window
+        
+        self.n_vessels_ub = case["n_vessels_ub"]
+        
+        self.one_base = case["one_base"]
 
     # First stage sets
     @property
