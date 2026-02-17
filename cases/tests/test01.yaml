@@ -8,13 +8,13 @@
 
 max_multiday_vessels: 2
 
-bases: ["1"]
+bases: ["1", "2", "3"]
 
 n_vessels_ub: 3
 
 one_base: True
 
-wind_farms: ["A"]
+wind_farms: ["A", "B", "C"]
 
 days_per_period: 10
 

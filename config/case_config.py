@@ -193,6 +193,17 @@ class CaseConfig:
     def R(self):
         return {h.name: h.periodic_return for h in self.vessel_types if h.multiday}
 
+    @property
+    def U(self):
+        U = {}
+        for h in self.vessel_types:
+            if h.multiday:
+                for i in self.bases + self.wind_farms:
+                    for j in self.bases + self.wind_farms:
+                        if i != j:
+                            traveltime = haversine((i.lat, i.lon), (j.lat, j.lon), unit=Unit.KILOMETERS) / h.travel_speed
+                            U[h.name, i.name, j.name] = (traveltime + 11) // 24 + 1
+        return U
 
 
 

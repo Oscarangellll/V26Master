@@ -2,6 +2,7 @@ import csv
 import os
 from datetime import datetime
 import gurobipy as gp
+from haversine import haversine, Unit
 
 from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
@@ -118,7 +119,10 @@ class OptimizationModel:
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
-        U = {(i, j): 1 for i in L for j in L if i !=j}
+        
+        #U represents days spent traveling (vessels are unavailable for maintenance tasks during travel).
+        U = self.case.U
+        print(U)
 
         # Second stage variables
         x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER)
@@ -319,7 +323,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-U[(i, j)], s] for j in L if (i!=j and d-U[(i, j)]>0)) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
+            (delta[v, i, d-1, s] + gp.quicksum(f[v, j, i, d-U[(h, i, j)], s] for j in L if (i!=j and d-U[(h, i, j)]>0)) - gp.quicksum(f[v, i, j, d-1, s] for j in L if i!=j) == delta[v, i, d, s]
             for h in H_M
             for v in V[h]
             for i in L
@@ -329,7 +333,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-U[(w, j)], s] for j in L if (w!=j and d-U[(w, j)]>0)) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
+            (delta[v, w, d-1, s] + gp.quicksum(f[v, j, w, d-U[(h, w, j)], s] for j in L if (w!=j and d-U[(h, w, j)]>0)) - gp.quicksum(f[v, w, j, d-1, s] for j in L if w!=j) == delta[v, w, d, s]
             for h in H_M
             for v in V[h]
             for w in W
@@ -339,7 +343,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-U[(b, j)], s] for j in L if (b!=j and d-U[(b, j)]>0)) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
+            (delta[v, b, d-1, s] + gp.quicksum(f[v, j, b, d-U[(h, b, j)], s] for j in L if (b!=j and d-U[(h, b, j)]>0)) - gp.quicksum(f[v, b, j, d-1, s] for j in L if b!=j) == delta[v, b, d, s] + r_E[v, b, d, s] - r_S[v, b, d, s]
             for h in H_M
             for v in V[h]
             for b in B

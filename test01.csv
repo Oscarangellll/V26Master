@@ -1,6 +1,8 @@
-case_id,case_name,n_scenarios,instance,objective,mip_gap,runtime,n_variables,n_constraints,active_bases,gamma_LT,gamma_ST,wind_farms,bases,max_multiday_vessels,scenario_seeds,n_periods,days_per_period,one_base,n_vessels_ub
-W1_B1_V2_S3_T2,tests\test01,3,1,2070157.4036205339,1.1247001954859476e-16,0.08,1620,1328,1,SOV@1:1,none,A,1,2,"769,560,308",2,10,True,3
-W1_B1_V2_S3_T2,tests\test01,3,2,2371638.620759626,0.0,0.03,1482,1328,1,SOV@1:1,none,A,1,2,"544,314,501",2,10,True,3
-W1_B1_V2_S3_T2,tests\test01,3,3,2134163.5488849226,9.360776421109958e-05,0.02,1497,1328,1,SOV@1:1,none,A,1,2,"90,107,211",2,10,True,3
-W1_B1_V2_S3_T2,tests\test01,3,4,1539311.2269113318,4.7182425656110344e-05,0.03,1677,1328,1,SOV@1:1,none,A,1,2,"155,745,497",2,10,True,3
-W1_B1_V2_S3_T2,tests\test01,3,5,2403590.923653915,1.93735665551543e-16,0.03,1544,1328,1,SOV@1:1,none,A,1,2,"148,813,596",2,10,True,3
+case_id,case_name,coalition,n_scenarios,instance,objective,mip_gap,runtime,n_variables,n_constraints,base_decision,gamma_LT_decision,gamma_ST_decision,wind_farms,bases,max_multiday_vessels,scenario_seeds,n_periods,days_per_period,one_base,n_vessels_ub
+W1_B3_V2_S1_T2,tests\test01,A,1,1,3884221.772287335,1.1988535016977708e-16,0.03,1077,714,1,SOV@1:1,none,A,"3,2,1",2,769,2,10,True,3
+W1_B3_V2_S1_T2,tests\test01,B,1,1,2005987.9712674415,0.001969537853161135,0.01,1083,714,2,SOV@2:1,none,B,"3,2,1",2,769,2,10,True,3
+W1_B3_V2_S1_T2,tests\test01,C,1,1,1759067.517939056,0.0,0.04,1115,714,3,SOV@3:1,none,C,"3,2,1",2,769,2,10,True,3
+W2_B3_V2_S1_T2,tests\test01,BA,1,1,4934396.833549626,1.8874091525904269e-16,0.07,1835,1037,1,SOV@1:2,Jan|CTV@1:1,"B,A","3,2,1",2,769,2,10,True,3
+W2_B3_V2_S1_T2,tests\test01,CA,1,1,4623002.513596562,0.001089564588685334,0.06,1867,1037,3,SOV@3:2,Jan|CTV@3:1,"C,A","3,2,1",2,769,2,10,True,3
+W2_B3_V2_S1_T2,tests\test01,CB,1,1,3548773.347393034,0.0,0.14,1873,1037,3,"CTV@3:1, SOV@3:2",none,"C,B","3,2,1",2,769,2,10,True,3
+W3_B3_V2_S1_T2,tests\test01,CBA,1,1,6859662.774332691,0.0007153601425227337,0.28,2705,1360,1,"CTV@1:2, SOV@1:2",none,"C,B,A","3,2,1",2,769,2,10,True,3
