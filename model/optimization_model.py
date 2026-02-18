@@ -122,7 +122,6 @@ class OptimizationModel:
         
         #U represents days spent traveling (vessels are unavailable for maintenance tasks during travel).
         U = self.case.U
-        print(U)
 
         # Second stage variables
         x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER)
@@ -423,20 +422,19 @@ class OptimizationModel:
         model.addConstr(
             (eta["1"] == 1)
         )
-        model.addConstr(
+        model.addConstrs(
             (gamma_ST[h, b, t] == 0
             for h in H
             for b in B
             for t in T)
         )
-        
         model.addConstr(
             (gamma_LT["CTV", "1"] == 1)
         )
         model.addConstr(
             (gamma_LT["SOV", "1"] == 2)
         )
-        model.addConstr(
+        model.addConstrs(
             (gamma_LT["CTV", b] == 0
             for b in ["2", "3"])
         )

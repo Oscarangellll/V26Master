@@ -48,6 +48,13 @@ parser.add_argument(
     help="Number of scenarios to sample for each instance"
 )
 
+parser.add_argument(
+    "-i", "--iterate-coalitions",
+    type=bool,
+    required=True,
+    help="Whether to iterate over coalitions"
+)
+
 args = parser.parse_args()
 
 if args.method == "mip":
@@ -57,7 +64,10 @@ if args.method == "mip":
     # Load full case to discover all wind farms
     full_case = CaseConfig(args.case)
     all_wind_farms = [w.name for w in full_case.wind_farms]
-    coalitions = get_coalitions(all_wind_farms)
+    if args.iterate_coalitions:
+        coalitions = get_coalitions(all_wind_farms)
+    else:
+        coalitions = [all_wind_farms]
     
     results_file = Path(args.case).stem + ".csv"
     

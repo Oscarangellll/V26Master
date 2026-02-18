@@ -113,7 +113,21 @@ class FixedData:
             n_turbines=100,
             iso="DEU",
             weather_location_id=1,
-        )
+        ),
+        WindFarm("D",
+            lat=55.23, 
+            lon=7.61,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=1,
+        ),
+        WindFarm("E",
+            lat=54.68, 
+            lon=7.4,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=2,
+        ),
     ]
     
     weather_locations = [
