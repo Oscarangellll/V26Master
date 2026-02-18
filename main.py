@@ -49,9 +49,8 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-i", "--iterate-coalitions",
-    type=bool,
-    required=True,
+    "--i", "--iterate-coalitions",
+    action="store_true",
     help="Whether to iterate over coalitions"
 )
 
@@ -64,7 +63,7 @@ if args.method == "mip":
     # Load full case to discover all wind farms
     full_case = CaseConfig(args.case)
     all_wind_farms = [w.name for w in full_case.wind_farms]
-    if args.iterate_coalitions:
+    if args.i:
         coalitions = get_coalitions(all_wind_farms)
     else:
         coalitions = [all_wind_farms]

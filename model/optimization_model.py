@@ -429,10 +429,10 @@ class OptimizationModel:
             for t in T)
         )
         model.addConstr(
-            (gamma_LT["CTV", "1"] == 1)
+            (gamma_LT["CTV", "1"] == 2)
         )
         model.addConstr(
-            (gamma_LT["SOV", "1"] == 2)
+            (gamma_LT["SOV", "1"] == 4)
         )
         model.addConstrs(
             (gamma_LT["CTV", b] == 0
