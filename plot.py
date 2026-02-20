@@ -30,7 +30,7 @@ weather_model = WeatherModel(0.4, 0.1)
 ys = weather_model.simulate(1, rng, month_of_obs=month_of_obs_w)
 
 # Distributions
-if True:
+if False:
     fig, axs = plt.subplots(1, 2, figsize=(FIG_WIDTH, 4))
 
     axs[0].hist((y[:,0], ys[:,0]), bins=30, density=True, label=["Observed", "Simulated"])
@@ -55,7 +55,7 @@ if False:
 
 
 # Weather window persistance
-if True:
+if False:
     # --- real WW ---
     cond = ((y[:,0] <= 30) & (y[:,1] <= 2)).astype(int)
     cond = np.pad(cond, 1)
@@ -181,13 +181,160 @@ if False:
 
     plt.show()
 
+# --- Average year weather window time series (observed vs synthetic), 07–19 only ---
+if False:
+    from statsmodels.nonparametric.smoothers_lowess import lowess
 
+    # 1. Filter to hours between 07:00 and 19:00
+    hour_mask = (df_weather.index.hour >= 7) & (df_weather.index.hour < 19)
 
+    y_day = y[hour_mask]
+    ys_day = ys[hour_mask]
+    doy = df_weather.index[hour_mask].dayofyear.to_numpy()
+    years = df_weather.index[hour_mask].year.to_numpy()
 
+    unique_years = np.unique(years)
+    n_years = len(unique_years)
 
+    # 2. Weather window condition
+    ww_obs_hourly = ((y_day[:,0] <= 30) & (y_day[:,1] <= 2)).astype(int)
+    ww_syn_hourly = ((ys_day[:,0] <= 30) & (ys_day[:,1] <= 2)).astype(int)
 
+    # 3. Prepare arrays
+    max_doy = doy.max()
+    daily_obs = np.zeros(max_doy)
+    daily_syn = np.zeros(max_doy)
 
+    # 4. Aggregate per day-of-year, then average across years
+    for d in range(1, max_doy+1):
+        mask = (doy == d)
+        if mask.sum() > 0:
+            total_obs = ww_obs_hourly[mask].sum()
+            total_syn = ww_syn_hourly[mask].sum()
 
+            # Convert to hours per day (divide by number of years)
+            daily_obs[d-1] = total_obs / n_years
+            daily_syn[d-1] = total_syn / n_years
+        else:
+            daily_obs[d-1] = np.nan
+            daily_syn[d-1] = np.nan
 
+    # 5. LOWESS smoothing
+    x = np.arange(max_doy)
+    frac = 0.1  # smoothing parameter
 
+    trend_obs = lowess(daily_obs, x, frac=frac, return_sorted=False)
+    trend_syn = lowess(daily_syn, x, frac=frac, return_sorted=False)
 
+    # 6. Plot: two subplots
+    fig, axs = plt.subplots(2, 1, figsize=(FIG_WIDTH, 8), sharex=True)
+
+    # Observed
+    axs[0].plot(x, daily_obs, label="Observed (avg year)", lw=1.0)
+    axs[0].plot(x, trend_obs, label="Trend (LOWESS)", lw=2, color="red")
+    axs[0].set_ylabel("Weather window hours/day (07–19)")
+    axs[0].set_title("Observed average year (07–19 only)")
+    axs[0].set_ylim(0, 13)
+    axs[0].legend()
+
+    # Synthetic
+    axs[1].plot(x, daily_syn, label="Synthetic (avg year)", lw=1.0)
+    axs[1].plot(x, trend_syn, label="Trend (LOWESS)", lw=2, color="red")
+    axs[1].set_ylabel("Weather window hours/day (07–19)")
+    axs[1].set_title("Synthetic average year (07–19 only)")
+    axs[1].set_ylim(0, 13)
+    axs[1].legend()
+
+    axs[1].set_xlabel("Day of year")
+    plt.tight_layout()
+    plt.show()
+
+# --- Average year weather window time series (observed vs synthetic), 07–19 only ---
+if False:
+    from statsmodels.nonparametric.smoothers_lowess import lowess
+
+    # 1. Filter to hours between 07:00 and 19:00
+    hour_mask = (df_weather.index.hour >= 7) & (df_weather.index.hour < 19)
+
+    y_day = y[hour_mask]
+    ys_day = ys[hour_mask]
+    doy = df_weather.index[hour_mask].dayofyear.to_numpy()
+    years = df_weather.index[hour_mask].year.to_numpy()
+
+    unique_years = np.unique(years)
+    n_years = len(unique_years)
+
+    # 2. Weather window condition
+    ww_obs_hourly = ((y_day[:,0] <= 30) & (y_day[:,1] <= 2)).astype(int)
+    ww_syn_hourly = ((ys_day[:,0] <= 30) & (ys_day[:,1] <= 2)).astype(int)
+
+    # 3. Prepare arrays
+    max_doy = doy.max()
+    daily_obs = np.zeros(max_doy)
+    daily_syn = np.zeros(max_doy)
+
+    # 4. Aggregate per day-of-year, then average across years
+    for d in range(1, max_doy+1):
+        mask = (doy == d)
+        if mask.sum() > 0:
+            total_obs = ww_obs_hourly[mask].sum()
+            total_syn = ww_syn_hourly[mask].sum()
+
+            # Convert to hours per day (divide by number of years)
+            daily_obs[d-1] = total_obs / n_years
+            daily_syn[d-1] = total_syn / n_years
+        else:
+            daily_obs[d-1] = np.nan
+            daily_syn[d-1] = np.nan
+
+    # 5. LOWESS smoothing for observed average year
+    x = np.arange(max_doy)
+    frac = 0.1  # smoothing parameter
+
+    trend_obs = lowess(daily_obs, x, frac=frac, return_sorted=False)
+
+    # --- One plot per synthetic year: observed avg (top) + synthetic year (bottom) ---
+    syn_years = unique_years
+
+    for yr in syn_years:
+        # Mask for this synthetic year
+        mask_yr = (years == yr)
+
+        # Extract synthetic WW hours for this year
+        ww_syn_year = ww_syn_hourly[mask_yr]
+        doy_year = doy[mask_yr]
+
+        # Prepare daily array for this year
+        daily_syn_year = np.zeros(max_doy)
+        daily_syn_year[:] = np.nan
+
+        for d in range(1, max_doy+1):
+            m = (doy_year == d)
+            if m.sum() > 0:
+                daily_syn_year[d-1] = ww_syn_year[m].sum()
+
+        # LOWESS trend for this synthetic year
+        trend_syn_year = lowess(daily_syn_year, x, frac=0.1, return_sorted=False)
+
+        # --- Plot ---
+        fig, axs = plt.subplots(2, 1, figsize=(FIG_WIDTH, 8), sharex=True)
+
+        # Top: observed average year
+        axs[0].plot(x, daily_obs, label="Observed (avg year)", lw=1.0)
+        axs[0].plot(x, trend_obs, label="Trend (LOWESS)", lw=2, color="red")
+        axs[0].set_ylabel("Weather window hours/day (07–19)")
+        axs[0].set_title("Observed average year (07–19 only)")
+        axs[0].set_ylim(0, 13)
+        axs[0].legend()
+
+        # Bottom: synthetic year
+        axs[1].plot(x, daily_syn_year, label=f"Synthetic year {yr}", lw=1.0)
+        axs[1].plot(x, trend_syn_year, label="Trend (LOWESS)", lw=2, color="red")
+        axs[1].set_ylabel("Weather window hours/day (07–19)")
+        axs[1].set_title(f"Synthetic year {yr} (07–19 only)")
+        axs[1].set_ylim(0, 13)
+        axs[1].legend()
+
+        axs[1].set_xlabel("Day of year")
+        plt.tight_layout()
+        plt.show()

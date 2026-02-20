@@ -1,0 +1,23 @@
+Dekomponering:
+- Benders INTEGER
+
+Heuristikker:
+- Progressive hedging
+- Consensus fixing
+- GRASP
+- Genetic Algorithm 
+
+Dual Bounds:
+- lagrange relaksering --> dual bound i kombinasjon med heuristikk
+
+Scenario Reduksjon
+- Clustering
+- copula based - Michal Kaut
+- moment matching
+
+
+1. Scenario Reduksjon
+2. Heuristikk
+3. Lagrange relax for dual bound
+4. Bender
+

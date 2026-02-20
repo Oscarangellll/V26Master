@@ -10,7 +10,9 @@ max_multiday_vessels: 8
 
 bases: ["1", "2", "3"]
 
-n_vessels_ub: 15
+n_vessels_ub_LT: 10
+
+n_vessels_ub_ST: 5
 
 one_base: True
 

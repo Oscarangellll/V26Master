@@ -62,7 +62,8 @@ class CaseConfig:
         
         self.upper_bound_weather_window = data.upper_bound_weather_window
         
-        self.n_vessels_ub = case["n_vessels_ub"]
+        self.n_vessels_ub_ST = case["n_vessels_ub_ST"]
+        self.n_vessels_ub_LT = case["n_vessels_ub_LT"]
         
         self.one_base = case["one_base"]
 

@@ -1,0 +1,2 @@
+case_id,case_name,coalition,n_scenarios,instance,objective,mip_gap,runtime,n_variables,n_constraints,base_decision,gamma_LT_decision,gamma_ST_decision,wind_farms,bases,max_multiday_vessels,scenario_seeds,n_periods,days_per_period,one_base,n_vessels_ub_ST,n_vessels_ub_LT
+W1_B1_V2_S5_T12,tests\test01,A,5,1,19818150.52246104,0.0004922262290376818,2.22,52188,38796,1,SOV@1:1,"Oct|CTV@1:1, Nov|CTV@1:1",A,1,2,"769,560,308,544,314",12,30,True,1,2

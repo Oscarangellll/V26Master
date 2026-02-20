@@ -34,9 +34,9 @@ class OptimizationModel:
         K_REQ = self.case.K_REQ
 
         # First stage variables
-        gamma_ST = model.addVars(H, B, T, ub=self.case.n_vessels_ub, vtype=gp.GRB.INTEGER)
+        gamma_ST = model.addVars(H, B, T, ub=self.case.n_vessels_ub_ST, vtype=gp.GRB.INTEGER)
 
-        gamma_LT = model.addVars(H, B, ub=self.case.n_vessels_ub, vtype=gp.GRB.INTEGER)
+        gamma_LT = model.addVars(H, B, ub=self.case.n_vessels_ub_LT, vtype=gp.GRB.INTEGER)
 
         alpha = model.addVars(
             ((v, b, t) 
@@ -533,7 +533,8 @@ class OptimizationModel:
             "n_periods": len(case.T),
             "days_per_period": case.days_per_period,
             "one_base": case.one_base,
-            "n_vessels_ub": case.n_vessels_ub,
+            "n_vessels_ub_ST": case.n_vessels_ub_ST,
+            "n_vessels_ub_LT": case.n_vessels_ub_LT,
 
         }
 
@@ -544,3 +545,90 @@ class OptimizationModel:
             if write_header:
                 writer.writeheader()
             writer.writerow(row)
+
+    def update_fixed_decisions(self, fixed_decisions, *, strict=True, use_start=False):
+        """
+        fixed_decisions: dict[tuple[str, tuple], int|float]
+        f.eks. {("eta", ("1",)): 1, ("gamma_LT", ("SOV","1")): 4, ("gamma_ST", ("CTV","1",2)): 0}
+        """
+        if self.model is None:
+            raise RuntimeError("Model not built. Call build_model() first.")
+
+        for (group, key), value in fixed_decisions.items():
+            try:
+                vardict = getattr(self, group)  # e.g. self.eta, self.gamma_LT
+            except AttributeError:
+                if strict:
+                    raise ValueError(f"Unknown variable group: {group}")
+                continue
+
+            try:
+                var = vardict[key]  # tupledict supports tuple keys
+            except KeyError:
+                if strict:
+                    raise KeyError(f"Variable not found: {group}{key}")
+                continue
+
+            var.LB = value
+            var.UB = value
+            if use_start:
+                var.Start = value
+
+        self.model.update()
+
+    def get_solution(self, which="all", *, include_zero=True, tol=1e-9):
+        """
+        Retrieve solution values.
+
+        which:
+            - "all": returns dict[varName -> value] for all vars in model
+            - "first_stage": returns only gamma_ST, gamma_LT, alpha, eta
+            - "second_stage": returns x, delta, lmbd_S, lmbd_M, z, b, f, r_S, r_E
+
+        include_zero:
+            If False: only include variables with |X| > tol (much smaller dicts)
+        """
+        if self.model is None:
+            raise RuntimeError("Model not built. Call build_model() first.")
+
+        # Ensure we actually have a solution
+        if self.model.SolCount == 0:
+            raise RuntimeError(f"No solution available. Status={self.model.Status}")
+
+        def extract(var_dict):
+            out = {}
+            for key, var in var_dict.items():
+                val = var.X
+                if include_zero or abs(val) > tol:
+                    out[var.VarName] = val
+            return out
+
+        if which == "all":
+            if include_zero:
+                return {v.VarName: v.X for v in self.model.getVars()}
+            else:
+                return {v.VarName: v.X for v in self.model.getVars() if abs(v.X) > tol}
+
+        elif which == "first_stage":
+            sol = {}
+            sol.update(extract(self.gamma_ST))
+            sol.update(extract(self.gamma_LT))
+            sol.update(extract(self.alpha))
+            sol.update(extract(self.eta))
+            return sol
+
+        elif which == "second_stage":
+            sol = {}
+            sol.update(extract(self.x))
+            sol.update(extract(self.delta))
+            sol.update(extract(self.lmbd_S))
+            sol.update(extract(self.lmbd_M))
+            sol.update(extract(self.z))
+            sol.update(extract(self.b))
+            sol.update(extract(self.f))
+            sol.update(extract(self.r_S))
+            sol.update(extract(self.r_E))
+            return sol
+
+        else:
+            raise ValueError("which must be one of: 'all', 'first_stage', 'second_stage'.")
