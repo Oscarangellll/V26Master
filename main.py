@@ -90,7 +90,7 @@ if args.method == "mip":
             model.build_model()
             
             model.model.setParam("OutputFlag", 0)
-            model.model.setParam("MIPGap", 0.0005) # 0.2% optimality gap
+            model.model.setParam("MIPGap", 0.002) # 0.2% optimality gap
             
             model.model.optimize()
             
