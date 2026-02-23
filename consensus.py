@@ -112,7 +112,7 @@ def fix_zero_gamma_ST(unfixed_set, prev_sol, judges, fixed):
 
 
 def run_consensus_for_case(case, judge_seeds_1scenario_each, master_scenarios, weather_model, price_model,
-                           *, mip_gap_judges=0.007, mip_gap_master=0.001, output_flag=0):
+                           *, mip_gap_judges=0.008, mip_gap_master=0.001, output_flag=0):
     """
     Runs Step A/B on judge models (each has 1 scenario),
     then Step C master solve with master_scenarios (multi-scenario).
