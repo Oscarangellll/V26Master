@@ -15,6 +15,7 @@ class OptimizationModel:
     def build_model(self):
         
         model = gp.Model()
+        model.setParam("OutputFlag", 0)
 
         # First stage sets
         H = self.case.H
@@ -475,7 +476,7 @@ class OptimizationModel:
             if var.X > 0:
                 print(f"delta[{v}, {i}, {d}, {s}] = {var.X}")
                 
-    def report_to_csv(self, filename, instance=1, write_header=False):
+    def report_to_csv(self, resultspath, instance=1, runtime=None, write_header=False):
         """Save a summary row of the solved model to a CSV file."""
 
         case = self.case
@@ -520,7 +521,7 @@ class OptimizationModel:
             "instance": instance,
             "objective": model.ObjVal if model.SolCount > 0 else None,
             "mip_gap": model.MIPGap if model.SolCount > 0 else None,
-            "runtime": round(model.Runtime, 2),
+            "runtime": round(runtime, 2) if runtime is not None else round(model.Runtime, 2),
             "n_variables": model.NumVars,
             "n_constraints": model.NumConstrs,
             "base_decision": ",".join(active_bases) if active_bases else "none",
@@ -539,8 +540,11 @@ class OptimizationModel:
         }
 
         # --- Write (create or append) ---
+        from pathlib import Path
+        Path(resultspath).parent.mkdir(parents=True, exist_ok=True)
+
         mode = "w" if write_header else "a"
-        with open(filename, mode, newline="") as csvfile:
+        with open(resultspath, mode, newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=row.keys())
             if write_header:
                 writer.writeheader()
