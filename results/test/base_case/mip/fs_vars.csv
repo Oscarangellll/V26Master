@@ -1,9 +1,0 @@
-var_name,value
-"gamma_LT[SOV,1]",2.0
-"alpha[SOV1,1,Jan]",1.0
-"alpha[SOV1,1,Feb]",1.0
-"alpha[SOV1,1,Mar]",1.0
-"alpha[SOV2,1,Jan]",1.0
-"alpha[SOV2,1,Feb]",1.0
-"alpha[SOV2,1,Mar]",1.0
-eta[1],1.0
