@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import hashlib
 
 import pandas as pd
 import numpy as np
@@ -130,6 +131,8 @@ class FixedData:
         ),
     ]
     
+    iso_codes = sorted({w.iso for w in wind_farms})
+    
     weather_locations = [
         WeatherLocation(1, lat=55.23, lon=7.61),
         WeatherLocation(2, lat=54.68, lon=7.4),
@@ -190,10 +193,47 @@ class FixedData:
     
     power_curve = PowerCurve()
     
-    electricity_price_from_year = 2023
-    electricity_price_to_year = 2025
+    price_from_year = 2023
+    price_to_year = 2025
 
     upper_bound_weather_window = 15
+
+    travel_threshold_hours = 12
+   
+    def weather_location_hash(self, wl):
+        s = f"{wl.id}_{wl.lat}_{wl.lon}_{self.weather_from_year}_{self.weather_to_year}"
+        return hashlib.sha256(s.encode()).hexdigest()[:10]
+    
+    def weather_data_hash(self):
+        s = ";".join(
+            f"{wl.id}_{wl.lat}_{wl.lon}"
+            for wl in sorted(self.weather_locations, key=lambda x: x.id)
+        )
+        s = f"{s}_{self.weather_from_year}_{self.weather_to_year}"
+        return hashlib.sha256(s.encode()).hexdigest()[:10]
+    
+    def weather_model_hash(self, rs, rh):
+        s = ";".join(
+            f"{wl.id}_{wl.lat}_{wl.lon}"
+            for wl in sorted(self.weather_locations, key=lambda x: x.id)
+        )
+        s = f"{s}_{self.weather_from_year}_{self.weather_to_year}_{rs}_{rh}"
+        return hashlib.sha256(s.encode()).hexdigest()[:10]
+    
+    def price_data_hash(self):
+        s = ";".join(self.iso_codes)
+        s = f"{s}_{self.price_from_year}_{self.price_to_year}"
+        return hashlib.sha256(s.encode()).hexdigest()[:10]
+
+    def price_model_hash(self):
+        s = ";".join(
+            f"{wl.id}_{wl.lat}_{wl.lon}"
+            for wl in sorted(self.weather_locations, key=lambda x: x.id)
+        )
+        s = f"{s}_{self.weather_from_year}_{self.weather_to_year}"
+        s = f"{s}_{';'.join(self.iso_codes)}"
+        s = f"{s}_{self.price_from_year}_{self.price_to_year}"
+        return hashlib.sha256(s.encode()).hexdigest()[:10]
         
         
 data = FixedData()

@@ -1,11 +1,10 @@
 import csv
-import os
 from datetime import datetime
-import gurobipy as gp
-from haversine import haversine, Unit
+import os
 
-from config.case_config import CaseConfig
-from config.scenario_config import ScenarioConfig
+import gurobipy as gp
+
+from config import CaseConfig, ScenarioConfig
 
 class OptimizationModel:
     def __init__(self, case: CaseConfig, scenario: ScenarioConfig):
@@ -26,8 +25,6 @@ class OptimizationModel:
         T = self.case.T
     
         # First stage parameters
-        # Once per vessel charter, not per period? Counts mob 
-        # rate mutliple times for consecutive ST periods.             
         C_ST = self.case.C_ST
         C_LT = self.case.C_LT
         C_B = self.case.C_B
@@ -110,7 +107,7 @@ class OptimizationModel:
         D_T = self.case.D_T
         K_S = self.scenario.K_S
         K_M = self.scenario.K_M
-        S = self.scenario.scenarios
+        S = self.scenario.S
         
         # Second stage parameters
         F = self.scenario.F
@@ -121,7 +118,6 @@ class OptimizationModel:
         C_T = self.case.C_T
         R = self.case.R
         
-        #U represents days spent traveling (vessels are unavailable for maintenance tasks during travel).
         U = self.case.U
 
         # Second stage variables
@@ -457,7 +453,9 @@ class OptimizationModel:
         self.f = f
         self.r_S = r_S
         self.r_E = r_E
-        
+    
+    def optimize(self):
+        self.model.optimize()
 
     def print_variables(self):
         #print active gamma variables

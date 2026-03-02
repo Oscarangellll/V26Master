@@ -1,17 +1,12 @@
 import pandas as pd
 
 from data.fixed_data import data
-from data.hashing import *
 
 df = pd.read_csv("data/electricity/original.csv", parse_dates=["Date"])
 
-iso_codes = {w.iso for w in data.wind_farms}
-from_year = data.electricity_price_from_year
-to_year = data.electricity_price_to_year
-
 df = df[
-    df["Date"].dt.year.between(from_year, to_year) &
-    df["ISO3 Code"].isin(iso_codes)
+    df["Date"].dt.year.between(data.price_from_year, data.price_to_year) &
+    df["ISO3 Code"].isin(data.iso_codes)
 ].drop(columns=["Country"])
 
 df = df.rename(
@@ -22,6 +17,6 @@ df = df.rename(
     }
 )
 
-filehash = hash_electricity_prices(iso_codes, from_year, to_year)
-filepath = f"data/electricity/{filehash}.csv"
-df.to_csv(filepath, index=False)
+data_hash = data.price_data_hash()
+data_path = f"data/electricity/{data_hash}.csv"
+df.to_csv(data_path, index=False)

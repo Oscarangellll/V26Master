@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 
 from data.fixed_data import data
-from data.hashing import *
 
 class WeatherModel:
     def __init__(self, resolution_speed=0.8, resolution_height=0.4):
@@ -14,37 +13,27 @@ class WeatherModel:
         
         self._models = {}
 
-        model_filehash = hash_weather_model(
-            data.weather_locations,
-            data.weather_from_year,
-            data.weather_to_year,
-            self.rs,
-            self.rh
-        )
-        model_filepath = f"models/{model_filehash}.pkl"
+        model_hash = data.weather_model_hash(self.rs, self.rh)
+        model_path = f"ml_models/{model_hash}.pkl"
 
-        if os.path.exists(model_filepath):
+        if os.path.exists(model_path):
             print("Reading weather model from file")
-            with open(model_filepath, "rb") as f:
+            with open(model_path, "rb") as f:
                 self._models = pickle.load(f)
         else:
             print("Fitting weather model")
             self._fit()
-            with open(model_filepath, "wb") as f:
+            with open(model_path, "wb") as f:
                 pickle.dump(self._models, f)
         
 
     def _fit(self):
 
-        data_filehash = hash_all_weather_locations(
-            data.weather_locations, 
-            data.weather_from_year, 
-            data.weather_to_year
-        ) 
-        data_filepath = f"data/weather/{data_filehash}.csv"
+        data_hash = data.weather_data_hash()
+        data_path = f"data/weather/{data_hash}.csv"
         
         df_weather = pd.read_csv(
-            data_filepath,
+            data_path,
             index_col="time",
             parse_dates=True
         )

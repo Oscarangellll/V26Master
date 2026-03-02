@@ -1,0 +1,2 @@
+n_scenarios,objective,gap,runtime,n_vars,n_constrs,master_seed
+5,1682385.8886182413,1.2455381414342817e-15,0.3593590259552002,3782,2235,2

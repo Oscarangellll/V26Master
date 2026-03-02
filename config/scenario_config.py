@@ -25,6 +25,7 @@ class ScenarioConfig:
                 prices[s, iso] = price_model.simulate(iso3_wind_speeds, iso, rng, case.periods, case.days_per_period)
         # print("rett før patterns skal lages")
         self.K_S, self.K_M, self.P = gen_patterns(weather, case, scenarios)
+        self.S = scenarios
         # print("rett etter patterns er laget")
         self.C_D = self.make_downtime_costs(weather, prices)
         self.F = self.make_failures()

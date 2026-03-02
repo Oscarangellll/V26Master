@@ -1,13 +1,6 @@
 import argparse
-import random
 from itertools import combinations
 from pathlib import Path
-
-from config import CaseConfig, ScenarioConfig
-from models import WeatherModel, PriceModel
-
-from model.optimization_model import OptimizationModel
-from model.consensus import ConsensusModel
 
 def get_coalitions(items):
     """Return all non-empty subsets of items."""
@@ -16,8 +9,10 @@ def get_coalitions(items):
         for combo in combinations(items, r):
             #sort combo alphabetically to ensure consistent coalition naming
             coalitions.append(sorted(list(combo)))
+
     #sort coalitions by length (smallest to largest) and then alphabetically
     coalitions.sort(key=lambda x: (len(x), x))
+
     return coalitions
 
 parser = argparse.ArgumentParser()
@@ -32,14 +27,14 @@ parser.add_argument(
 parser.add_argument(
     "-c", "--case",
     required=True,
-    help="Path to case config"
+    help="Case name"
 )
 
 parser.add_argument(
     "-n", "--n_instances",
     type=int,
     required=True,
-    help="Number of instances to solve (with different scenario seeds)"
+    help="Number of instances to solve"
 )
 
 parser.add_argument(
@@ -58,15 +53,14 @@ parser.add_argument(
 args = parser.parse_args()
 case_path = Path(f"cases/{args.case}.yaml")
 
-random.seed(98621454)
-
 full_case = CaseConfig(case_path=case_path)
-all_wind_farms = [w.name for w in full_case.wind_farms]
+full_case_wind_farm_names = [w.name for w in full_case.wind_farms]
 if args.i:
-    coalitions = get_coalitions(all_wind_farms)
+    coalitions = get_coalitions(full_case_wind_farm_names)
+    print(coalitions)
     folder = "coalitions"
 else:
-    coalitions = [all_wind_farms]
+    coalitions = [full_case_wind_farm_names]
     folder = "full_case_only"
 
 weather_model = WeatherModel()
@@ -74,8 +68,17 @@ price_model = PriceModel()
 
 resultspath = Path("results") / "Case" / args.case / args.method / folder / (Path(f"{args.n_instances}N{args.n_scenarios}S").stem + ".csv")
 
+master_seed = 22
+master_rng = np.random.default_rng(master_seed)
+
 # Pre-generate scenario seeds so every coalition uses the same ones
-scenario_seeds = [random.sample(range(1, 1000), args.n_scenarios) for _ in range(args.n_instances)]
+scenario_seeds = [  
+    master_rng.choice(
+        np.arange(1, 1000),
+        size=args.n_scenarios, 
+        replace=False
+    ) for _ in range(args.n_instances)
+]
 
 first_row = True
 for coalition in coalitions:
@@ -94,8 +97,8 @@ for coalition in coalitions:
             model.build_model()
             
             model.model.setParam("OutputFlag", 0)
-            model.model.setParam("MIPGap", 0.00002) # 0.2% optimality gap
-            # model.model.setParam("Threads", 1) # use a single thread for more consistent runtimes across different machines
+            model.model.setParam("MIPGap", 0.01) # 1% optimality gap
+            model.model.setParam("Threads", 1) # use a single thread for more consistent runtimes across different machines
             #print model thread in use
             print(f"Using {model.model.params.Threads} thread(s) for optimization")
             model.model.optimize()
@@ -132,7 +135,4 @@ for coalition in coalitions:
             )
             
             model.report_to_csv(resultspath, instance=instance, runtime=runtime, write_header=first_row)
-            first_row = False
-        
-        else:
-            print("method not recognized")
+            first_row = False 
