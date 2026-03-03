@@ -120,7 +120,7 @@ if __name__ == '__main__':
                     weather_model=weather_model,
                     price_model=price_model,
                     mip_gap_judges=0.01,
-                    log=True,
+                    log=False,
                 )
 
                 model, fix, runtime = cm.optimize(

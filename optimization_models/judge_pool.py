@@ -62,14 +62,6 @@ def _solve_one(fix_payload: Dict[str, Any]) -> Dict[str, Any]:
 
     bm = BoundManager(m)
     try:
-        # DEBUG: Log what bounds we're applying
-        if fix.fixed or fix.ub:
-            print(f"[WORKER seed={seed}] Applying: {len(fix.fixed)} fixed, {len(fix.ub)} ub")
-            for k, v in list(fix.fixed.items())[:3]:
-                print(f"  fixed {k}={v}")
-            for k, u in list(fix.ub.items())[:3]:
-                print(f"  ub {k}<={u}")
-        
         bm.apply_persistent_state(fix)
         m.model.update()
 
@@ -129,7 +121,6 @@ class JudgePool:
         self.mp_start_method = mp_start_method
 
         self._ctx = mp.get_context(self.mp_start_method) #returns a context object for multiprocessing with the specified start method
-        print(self._ctx)
         self._pools: List[mp.pool.Pool] = []
         self._started = False
 
@@ -160,7 +151,6 @@ class JudgePool:
         # With 20 judges, 20 pools is fine; overhead is small compared to MIP solves.
 
         for seed in self.judge_seeds:
-            print(f"Starting judge worker with seed {seed}...")
             pool = self._ctx.Pool( 
                 processes=1,
                 initializer=_init_worker, 
