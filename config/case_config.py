@@ -1,18 +1,18 @@
 from pathlib import Path
-import yaml
+
 from haversine import haversine, Unit
+import yaml
 
 from data.fixed_data import data
 
 class CaseConfig:
-
     def __init__(self, case_path, wind_farm_names=None):
         case_path = Path(case_path)
-        
+
+        self.name = case_path.stem
+
         with case_path.open() as f:
             case = yaml.safe_load(f)
-
-        self.name = case_path.relative_to("cases").with_suffix("")
         
         if "vessel_types" in case:
             self.vessel_types = [
@@ -24,31 +24,34 @@ class CaseConfig:
             self.vessel_types = data.vessel_types
 
         self.max_multiday_vessels = case["max_multiday_vessels"]
-
-        self.bases = [b for b in data.bases if b.name in case["bases"]]
         
+        self.bases = [b for b in data.bases if b.name in case["bases"]]
+
         self.periods = case.get("periods",
             ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         )
-
-        self.days_per_period = case.get("days_per_period", 30)
-
-        # Use wind_farm_names override if provided (for coalition analysis),
-        # otherwise use all wind farms from the YAML config
-        wf_filter = wind_farm_names if wind_farm_names is not None else case["wind_farms"]
-        self.wind_farms = [
-            w 
-            for w in data.wind_farms 
-            if w.name in wf_filter
-        ]
-        self.coalition = "".join(w.name for w in self.wind_farms)
         
+        self.n_vessels_ub_ST = case["n_vessels_ub_ST"]
+        
+        self.n_vessels_ub_LT = case["n_vessels_ub_LT"]
+        
+        self.one_base = case["one_base"]
+        
+        self.days_per_period = case.get("days_per_period", 30)
+        
+        wind_farm_names = wind_farm_names if wind_farm_names is not None else case["wind_farms"]
+        self.wind_farms = [
+            w
+            for w in data.wind_farms
+            if w.name in wind_farm_names 
+        ]
+
         self.all_wl_ids_for_iso = {
             iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
             for iso in list({w.iso for w in self.wind_farms})
         }
-        
+
         if "maintenance_categories" in case:
             self.maintenance_categories = [
                 m 
@@ -58,15 +61,12 @@ class CaseConfig:
         else:
             self.maintenance_categories = data.maintenance_categories
 
+        ### Case data from FixedData
         self.power_curve = data.power_curve
         
         self.upper_bound_weather_window = data.upper_bound_weather_window
-        
-        self.n_vessels_ub_ST = case["n_vessels_ub_ST"]
-        self.n_vessels_ub_LT = case["n_vessels_ub_LT"]
-        
-        self.one_base = case["one_base"]
 
+        
     # First stage sets
     @property
     def H(self):
@@ -155,15 +155,6 @@ class CaseConfig:
     @property
     def N(self):
         return {h.name: h.n_teams for h in self.vessel_types}
-
-    @property
-    def P(self):
-        P = {}
-
-        for m in self.maintenance_categories:
-            P[m.name, 1] = 2
-
-        return P
     
     @property
     def C_RT(self):
@@ -172,7 +163,8 @@ class CaseConfig:
         for h in self.vessel_types:
             for b in self.bases:
                 for w in self.wind_farms:
-                    C_RT[h.name, b.name, w.name] = 2 * haversine((b.lat, b.lon), (w.lat, w.lon), unit=Unit.KILOMETERS) * h.cost_per_km
+                    distance = 2 * haversine((b.lat, b.lon), (w.lat, w.lon), unit=Unit.KILOMETERS)
+                    C_RT[h.name, b.name, w.name] = distance * h.cost_per_km
 
         return C_RT
 
@@ -185,7 +177,12 @@ class CaseConfig:
                 for i in self.bases + self.wind_farms:
                     for j in self.bases + self.wind_farms:
                         if i != j:
-                            C_T[h.name, i.name, j.name] = haversine((i.lat, i.lon), (j.lat, j.lon), unit=Unit.KILOMETERS) * h.cost_per_km
+                            distance = haversine(
+                                (i.lat, i.lon), 
+                                (j.lat, j.lon), 
+                                unit=Unit.KILOMETERS
+                            )
+                            C_T[h.name, i.name, j.name] = distance * h.cost_per_km
 
         return C_T
 
@@ -201,8 +198,14 @@ class CaseConfig:
                 for i in self.bases + self.wind_farms:
                     for j in self.bases + self.wind_farms:
                         if i != j:
-                            traveltime = haversine((i.lat, i.lon), (j.lat, j.lon), unit=Unit.KILOMETERS) / h.travel_speed
-                            U[h.name, i.name, j.name] = (traveltime + 11) // 24 + 1
+                            distance = haversine(
+                                (i.lat, i.lon), 
+                                (j.lat, j.lon), 
+                                unit=Unit.KILOMETERS
+                            ) 
+                            traveltime = distance / h.travel_speed
+                            travel_threshold = data.travel_threshold_hours
+                            U[h.name, i.name, j.name] = (traveltime + travel_threshold - 1) // 24 + 1
         return U
 
 

@@ -1,12 +1,11 @@
 import os
 import zipfile
 
-import pandas as pd
-import numpy as np
 import cdsapi
+import numpy as np
+import pandas as pd
 
 from data.fixed_data import data
-from data.hashing import *
 
 dataset = "reanalysis-era5-single-levels-timeseries"
 client = cdsapi.Client()
@@ -24,10 +23,10 @@ df_full = []
 
 for wl in data.weather_locations:
     
-    filehash = hash_weather_location(wl, from_year, to_year)
-    filepath = f"data/weather/{filehash}.zip"
+    wl_hash = data.weather_location_hash(wl)
+    wl_path = f"data/weather/{wl_hash}.zip"
 
-    if not os.path.exists(filepath):
+    if not os.path.exists(wl_path):
         request = {
             "variable": [
                 "10m_u_component_of_wind",
@@ -42,9 +41,9 @@ for wl in data.weather_locations:
         results = client.retrieve(dataset, request)
         results.download(target=filepath)
     else:
-        print(f"{filepath} already exists.")
+        print(f"{wl_path} already exists.")
     
-    with zipfile.ZipFile(filepath, "r") as z:
+    with zipfile.ZipFile(wl_path, "r") as z:
         csv_files = z.namelist()
         
         if len(csv_files) == 1:
@@ -85,10 +84,10 @@ for wl in data.weather_locations:
 
 df_full = pd.concat(df_full)
 
-df_full_filehash = hash_all_weather_locations(data.weather_locations, from_year, to_year)
-df_full_filepath = f"data/weather/{df_full_filehash}.csv"
+df_full_hash = data.weather_data_hash()
+df_full_path = f"data/weather/{df_full_hash}.csv"
 
-df_full.to_csv(df_full_filepath, float_format="%.4f")
+df_full.to_csv(df_full_path, float_format="%.4f")
 
 
 

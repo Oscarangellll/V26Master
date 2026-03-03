@@ -3,22 +3,17 @@ import numpy as np
 import pandas as pd
 
 from data.fixed_data import data
-from data.hashing import *
 from models import WeatherModel, PriceModel
+from scenarios.gen_windows import _find_window 
 
 rng = np.random.default_rng(seed=5)
 
 FIG_WIDTH = 15/2.54
 
-weather_filehash = hash_all_weather_locations(
-    data.weather_locations,
-    data.weather_from_year,        
-    data.weather_to_year
-)
-weather_filepath = f"data/weather/{weather_filehash}.csv"
-
+data_w_hash = data.weather_data_hash()
+data_w_path = f"data/weather/{data_w_hash}.csv"
 df_weather = pd.read_csv(
-    weather_filepath,
+    data_w_path,
     index_col="time",
     parse_dates=True
 )
@@ -44,6 +39,27 @@ if False:
     fig.savefig("distributions.png", format="png")
 
     plt.show()
+
+# Daily weather_windows
+if False:
+    for m in range(12):
+        idx = month_of_obs_w == m
+        ym = y[idx]
+        y_days = ym.reshape(-1, 24, 2)
+
+        daily_windows = [
+            _find_window(day[:,0], day[:,1], data.vessel_types[1])
+            for day in y_days
+        ]
+        ysm = ys[idx]
+        ys_days = ysm.reshape(-1, 24, 2)
+
+        daily_windows_s = [
+            _find_window(day[:,0], day[:,1], data.vessel_types[1])
+            for day in ys_days
+        ]
+        plt.hist((daily_windows, daily_windows_s), bins=12)
+        plt.show()
 
 # Time series
 if False:
@@ -73,7 +89,7 @@ if False:
     ww_sim = ends_sim - starts_sim
 
     # --- bins ---
-    bin_size = 12 
+    bin_size = 24 
     bins = np.arange(0, 400 + bin_size, bin_size)
     bin_centers = (bins[:-1] + bins[1:]) / 2
 
@@ -146,7 +162,7 @@ if False:
 
 #### Prices
 price_model = PriceModel()
-if False:
+if True:
     price_filehash = hash_electricity_prices(
         {w.iso for w in data.wind_farms},
         data.electricity_price_from_year,
@@ -173,7 +189,7 @@ if False:
     
     fig, ax = plt.subplots(figsize=(FIG_WIDTH, 4))
 
-    ax.hist((p, ps), bins=30, density=True, label=["Observed", "Simulated"])
+    ax.hist((p, ps), bins=40, density=True, label=["Observed", "Simulated"])
     ax.set_xlabel("Electricity price [EUR/MWh]")
     ax.legend()
     

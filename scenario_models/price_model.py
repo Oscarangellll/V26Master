@@ -5,51 +5,39 @@ import numpy as np
 import pandas as pd
 
 from data.fixed_data import data
-from data.hashing import *
 
 class PriceModel:
     def __init__(self):
         
         self._models = {}
         
-        iso_codes = {w.iso for w in data.wind_farms}
-        self.filehash = hash_electricity_prices(
-            iso_codes,
-            data.electricity_price_from_year, 
-            data.electricity_price_to_year
-        )
-                            
-        model_filepath = f"models/{self.filehash}.pkl"
+        model_hash = data.price_model_hash()
+        model_path = f"scenario_models/{model_hash}.pkl"
 
-        if os.path.exists(model_filepath):
+        if os.path.exists(model_path):
             print("Reading price model from file")
-            with open(model_filepath, "rb") as f:
+            with open(model_path, "rb") as f:
                 self._models = pickle.load(f)
         else:
             print("Fitting price model")
             self._fit()
-            with open(model_filepath, "wb") as f:
+            with open(model_path, "wb") as f:
                 pickle.dump(self._models, f)
 
-
-
     def _fit(self):
-        data_weather_filehash = hash_all_weather_locations(
-            data.weather_locations,
-            data.weather_from_year,
-            data.weather_to_year
-        )
-        data_weather_filepath = f"data/weather/{data_weather_filehash}.csv"
+        data_w_hash = data.weather_data_hash()
+        data_w_path = f"data/weather/{data_w_hash}.csv"
         df_weather = pd.read_csv(
-            data_weather_filepath,
+            data_w_path,
             index_col="time", 
             usecols=["time", "speed", "weather_location_id"],
             parse_dates=True
         )
         
-        data_price_filepath = f"data/electricity/{self.filehash}.csv"
+        data_p_hash = data.price_data_hash()
+        data_p_path = f"data/electricity/{data_p_hash}.csv"
         df_price = pd.read_csv(
-            data_price_filepath, 
+            data_p_path, 
             index_col="date", 
             parse_dates=True
         )
