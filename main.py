@@ -7,7 +7,7 @@ from config.scenario_config import ScenarioConfig
 from scenario_models.weather_model import WeatherModel
 from scenario_models.price_model import PriceModel
 from optimization_models.optimization_model import OptimizationModel
-from optimization_models.consensus_model import ConsensusModel
+from optimization_models.consensus_model_multiprocessing import ConsensusModel
 
 def get_coalitions(items):
     """Return all non-empty subsets of items."""
