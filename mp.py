@@ -4,7 +4,7 @@ import os
 import time
 
 from config import BaseCaseConfig, CaseConfig, ScenarioConfig
-from ml_models import PriceModel, WeatherModel
+from scenario_models import PriceModel, WeatherModel
 from optimization_models import OptimizationModel
 
 weather_model = WeatherModel()
