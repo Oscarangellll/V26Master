@@ -22,6 +22,7 @@ class ScenarioConfig:
                     weather[(s, iso, loc)] = weather_model.simulate(loc, rng, case.periods, case.days_per_period)
                 iso3_wind_speeds = np.array([weather[s, iso, loc][:,0] for loc in sorted(case.all_wl_ids_for_iso[iso])]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
                 iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
+                #print iso3 weather first 20 rows with corresponding scenario
                 prices[s, iso] = price_model.simulate(iso3_wind_speeds, iso, rng, case.periods, case.days_per_period)
         # print("rett før patterns skal lages")
         self.K_S, self.K_M, self.P = gen_patterns(weather, case, scenarios)

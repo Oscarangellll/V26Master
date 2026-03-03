@@ -2,21 +2,18 @@
 # max_multiday_vessels: required
 # bases: required, list of bases 
 # periods: optional, default is all months
-# n_vessels_ub_ST: required
-# n_vessels_ub_LT: required
-# one_base: required
 # days_per_period: optional, default 30
 # wind_farms: required, list of wind farms
 # maintenance_categories: optional, list of categories
 
-max_multiday_vessels: 4
-
 bases: ["1", "2", "3"] #, "4", "5"]
 
-n_vessels_ub_LT: 5
+n_vessels_ub_LT_multi: 4
+n_vessels_ub_LT_single: 16
 
-n_vessels_ub_ST: 3
+n_vessels_ub_ST_multi: 2
+n_vessels_ub_ST_single: 8
 
 one_base: True
 
-wind_farms: ["A", "B"]
+wind_farms: ["A", "B", "C"]

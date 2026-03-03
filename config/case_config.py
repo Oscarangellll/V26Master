@@ -22,8 +22,6 @@ class CaseConfig:
             ]
         else:
             self.vessel_types = data.vessel_types
-
-        self.max_multiday_vessels = case["max_multiday_vessels"]
         
         self.bases = [b for b in data.bases if b.name in case["bases"]]
 
@@ -32,10 +30,12 @@ class CaseConfig:
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         )
         
-        self.n_vessels_ub_ST = case["n_vessels_ub_ST"]
+        self.n_vessels_ub_ST_multi = case["n_vessels_ub_ST_multi"]
+        self.n_vessels_ub_ST_single = case["n_vessels_ub_ST_single"]
         
-        self.n_vessels_ub_LT = case["n_vessels_ub_LT"]
-        
+        self.n_vessels_ub_LT_multi = case["n_vessels_ub_LT_multi"]
+        self.n_vessels_ub_LT_single = case["n_vessels_ub_LT_single"]
+
         self.one_base = case["one_base"]
         
         self.days_per_period = case.get("days_per_period", 30)
@@ -46,6 +46,7 @@ class CaseConfig:
             for w in data.wind_farms
             if w.name in wind_farm_names 
         ]
+        self.coalition = "".join(wf.name for wf in self.wind_farms)
 
         self.all_wl_ids_for_iso = {
             iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
@@ -83,7 +84,7 @@ class CaseConfig:
     @property
     def V(self):
         return {
-            h: [f"{h}{i + 1}" for i in range(self.max_multiday_vessels)]
+            h: [f"{h}{i + 1}" for i in range(self.n_vessels_ub_ST_multi + self.n_vessels_ub_LT_multi)]
             for h in self.H_M
         }
 

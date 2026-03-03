@@ -14,6 +14,7 @@ class OptimizationModel:
     def build_model(self):
         
         model = gp.Model()
+        model.setParam("OutputFlag", 0)  # silent mode
 
         # First stage sets
         H = self.case.H
@@ -31,9 +32,22 @@ class OptimizationModel:
         K_REQ = self.case.K_REQ
 
         # First stage variables
-        gamma_ST = model.addVars(H, B, T, ub=self.case.n_vessels_ub_ST, vtype=gp.GRB.INTEGER)
-
-        gamma_LT = model.addVars(H, B, ub=self.case.n_vessels_ub_LT, vtype=gp.GRB.INTEGER)
+        gamma_ST = {}
+        gamma_LT = {}
+        for b in B:
+            for t in T:
+                for h in self.case.vessel_types:
+                    if h.multiday:
+                        gamma_ST[h.name, b, t] = model.addVar(ub=self.case.n_vessels_ub_ST_multi)
+                        
+                    else:
+                        gamma_ST[h.name, b, t] = model.addVar(ub=self.case.n_vessels_ub_ST_single)
+        for b in B:
+            for h in self.case.vessel_types:
+                if h.multiday:
+                    gamma_LT[h.name, b] = model.addVar(ub=self.case.n_vessels_ub_LT_multi)
+                else:
+                    gamma_LT[h.name, b] = model.addVar(ub=self.case.n_vessels_ub_LT_single)
 
         alpha = model.addVars(
             ((v, b, t) 
@@ -482,7 +496,7 @@ class OptimizationModel:
 
         # --- Case identification ---
         case_id = (
-            f"W{len(case.W)}_B{len(case.B)}_V{case.max_multiday_vessels}"
+            f"W{len(case.W)}_B{len(case.B)}_V{case.n_vessels_ub_LT_multi + case.n_vessels_ub_ST_multi}"
             f"_S{len(scenario.scenarios)}_T{len(case.T)}"
         )
 
@@ -526,13 +540,14 @@ class OptimizationModel:
             "gamma_ST_decision": gamma_st_str,
             "wind_farms": ",".join(case.W),
             "bases": ",".join(case.B),
-            "max_multiday_vessels": case.max_multiday_vessels,
             "scenario_seeds": ",".join(str(s) for s in scenario.scenarios),
             "n_periods": len(case.T),
             "days_per_period": case.days_per_period,
             "one_base": case.one_base,
-            "n_vessels_ub_ST": case.n_vessels_ub_ST,
-            "n_vessels_ub_LT": case.n_vessels_ub_LT,
+            "n_vessels_ub_ST_multi": case.n_vessels_ub_ST_multi,
+            "n_vessels_ub_ST_single": case.n_vessels_ub_ST_single,
+            "n_vessels_ub_LT_multi": case.n_vessels_ub_LT_multi,
+            "n_vessels_ub_LT_single": case.n_vessels_ub_LT_single,
 
         }
 

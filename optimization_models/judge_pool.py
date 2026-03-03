@@ -7,8 +7,8 @@ from dataclasses import asdict
 from typing import Any, Dict, List, Tuple, Optional
 
 from config.case_config import CaseConfig
-from models.price_model import PriceModel
-from models.weather_model import WeatherModel
+from scenario_models.price_model import PriceModel
+from scenario_models.weather_model import WeatherModel
 
 _WORKER: Dict[str, Any] = {} 
 
@@ -24,7 +24,7 @@ def _init_worker(
     Builds judge OptimizationModel and stores it in _WORKER.
     """
     from config.scenario_config import ScenarioConfig
-    from model.optimization_model import OptimizationModel
+    from optimization_models.optimization_model import OptimizationModel
 
     scenario_cfg = ScenarioConfig(case, weather_model, price_model, scenarios=[judge_seed])
     m = OptimizationModel(case, scenario_cfg)
@@ -34,6 +34,7 @@ def _init_worker(
     m.model.setParam("Threads", 1)  # CRITICAL: one core per judge
 
     _WORKER["m"] = m
+    _WORKER["seed"] = judge_seed  # Store seed for debugging
 
 def _extract_first_stage(m) -> Dict[Tuple[str, Any], int]:
     sol: Dict[Tuple[str, Any], int] = {}
@@ -53,13 +54,22 @@ def _solve_one(fix_payload: Dict[str, Any]) -> Dict[str, Any]:
     Called many times. Applies FixState bounds, optimizes, returns results.
     fix_payload = {"fixed": {...}, "ub": {...}}
     """
-    from model.bound_manager import FixState, BoundManager  # your modules
+    from optimization_models.bound_manager import FixState, BoundManager  # your modules
 
     m = _WORKER["m"] 
+    seed = _WORKER.get("seed", "?")
     fix = FixState(fixed=dict(fix_payload["fixed"]), ub=dict(fix_payload["ub"]))
 
     bm = BoundManager(m)
     try:
+        # DEBUG: Log what bounds we're applying
+        if fix.fixed or fix.ub:
+            print(f"[WORKER seed={seed}] Applying: {len(fix.fixed)} fixed, {len(fix.ub)} ub")
+            for k, v in list(fix.fixed.items())[:3]:
+                print(f"  fixed {k}={v}")
+            for k, u in list(fix.ub.items())[:3]:
+                print(f"  ub {k}<={u}")
+        
         bm.apply_persistent_state(fix)
         m.model.update()
 
@@ -74,6 +84,9 @@ def _solve_one(fix_payload: Dict[str, Any]) -> Dict[str, Any]:
         }
 
         if m.model.SolCount == 0:
+            print(f"[WORKER seed={seed}] INFEASIBLE: Status={m.model.Status}")
+            print(f"  Fixed: {dict(fix.fixed)}")
+            print(f"  UB: {dict(fix.ub)}")
             out["obj"] = float("inf")
             out["sol"] = None
             return out
@@ -115,7 +128,8 @@ class JudgePool:
         self.cap_workers = int(cap_workers)
         self.mp_start_method = mp_start_method
 
-        self._ctx = mp.get_context(self.mp_start_method) 
+        self._ctx = mp.get_context(self.mp_start_method) #returns a context object for multiprocessing with the specified start method
+        print(self._ctx)
         self._pools: List[mp.pool.Pool] = []
         self._started = False
 
@@ -146,6 +160,7 @@ class JudgePool:
         # With 20 judges, 20 pools is fine; overhead is small compared to MIP solves.
 
         for seed in self.judge_seeds:
+            print(f"Starting judge worker with seed {seed}...")
             pool = self._ctx.Pool( 
                 processes=1,
                 initializer=_init_worker, 
