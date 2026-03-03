@@ -1,2 +1,2 @@
-from .case_config import BaseCaseConfig, CaseConfig
+from .case_config import CaseConfig
 from .scenario_config import ScenarioConfig

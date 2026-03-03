@@ -12,7 +12,7 @@ class PriceModel:
         self._models = {}
         
         model_hash = data.price_model_hash()
-        model_path = f"ml_models/{model_hash}.pkl"
+        model_path = f"scenario_models/{model_hash}.pkl"
 
         if os.path.exists(model_path):
             print("Reading price model from file")

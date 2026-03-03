@@ -1,5 +1,4 @@
 import csv
-from datetime import datetime
 import os
 
 import gurobipy as gp
@@ -8,32 +7,27 @@ from config import CaseConfig, ScenarioConfig
 
 class OptimizationModel:
     def __init__(self, case: CaseConfig, scenario: ScenarioConfig):
-        self.case = case
-        self.scenario = scenario
-    
-    def build_model(self):
-        
         model = gp.Model()
 
         # First stage sets
-        H = self.case.H
-        H_S = self.case.H_S
-        H_M = self.case.H_M
-        V = self.case.V
-        B = self.case.B
-        T = self.case.T
+        H = case.H
+        H_S = case.H_S
+        H_M = case.H_M
+        V = case.V
+        B = case.B
+        T = case.T
     
         # First stage parameters
-        C_ST = self.case.C_ST
-        C_LT = self.case.C_LT
-        C_B = self.case.C_B
-        K_MAX = self.case.K_MAX
-        K_REQ = self.case.K_REQ
+        C_ST = case.C_ST
+        C_LT = case.C_LT
+        C_B = case.C_B
+        K_MAX = case.K_MAX
+        K_REQ = case.K_REQ
 
         # First stage variables
-        gamma_ST = model.addVars(H, B, T, ub=self.case.n_vessels_ub_ST, vtype=gp.GRB.INTEGER)
+        gamma_ST = model.addVars(H, B, T, ub=case.n_vessels_ub_ST, vtype=gp.GRB.INTEGER)
 
-        gamma_LT = model.addVars(H, B, ub=self.case.n_vessels_ub_LT, vtype=gp.GRB.INTEGER)
+        gamma_LT = model.addVars(H, B, ub=case.n_vessels_ub_LT, vtype=gp.GRB.INTEGER)
 
         alpha = model.addVars(
             ((v, b, t) 
@@ -98,26 +92,26 @@ class OptimizationModel:
         )
 
         # Second stage sets
-        W = self.case.W 
-        L = self.case.L 
-        M = self.case.M
-        D = self.case.D
-        D_t = self.case.D_t
-        D_T = self.case.D_T
-        K_S = self.scenario.K_S
-        K_M = self.scenario.K_M
-        S = self.scenario.S
+        W = case.W 
+        L = case.L 
+        M = case.M
+        D = case.D
+        D_t = case.D_t
+        D_T = case.D_T
+        K_S = scenario.K_S
+        K_M = scenario.K_M
+        S = scenario.S
         
         # Second stage parameters
-        F = self.scenario.F
-        N = self.case.N
-        P = self.scenario.P
-        C_D = self.scenario.C_D
-        C_RT = self.case.C_RT 
-        C_T = self.case.C_T
-        R = self.case.R
+        F = scenario.F
+        N = case.N
+        P = scenario.P
+        C_D = scenario.C_D
+        C_RT = case.C_RT 
+        C_T = case.C_T
+        R = case.R
         
-        U = self.case.U
+        U = case.U
 
         # Second stage variables
         x = model.addVars(H_S, B, W, D, S, vtype=gp.GRB.INTEGER)
@@ -409,32 +403,11 @@ class OptimizationModel:
         
         model.setObjective(first_obj + second_obj)
         
-        if self.case.one_base:
+        if case.one_base:
             model.addConstr(
                 gp.quicksum(eta[b] for b in B) <= 1
             )
             
-        # #second stage only:
-        # model.addConstr(
-        #     (eta["1"] == 1)
-        # )
-        # model.addConstrs(
-        #     (gamma_ST[h, b, t] == 0
-        #     for h in H
-        #     for b in B
-        #     for t in T)
-        # )
-        # model.addConstr(
-        #     (gamma_LT["CTV", "1"] == 2)
-        # )
-        # model.addConstr(
-        #     (gamma_LT["SOV", "1"] == 4)
-        # )
-        # model.addConstrs(
-        #     (gamma_LT["CTV", b] == 0
-        #     for b in ["2", "3"])
-        # )
-
         model.update()
         
         self.model = model
@@ -453,183 +426,7 @@ class OptimizationModel:
         self.r_S = r_S
         self.r_E = r_E
     
-    def optimize(self):
-        self.model.optimize()
+    def __getattr__(self, name):
+        return getattr(self.model, name)
 
-    def print_variables(self):
-        #print active gamma variables
-        for (h, b, t), var in self.gamma_ST.items():
-            if var.X > 0:
-                print(f"gamma_ST[{h}, {b}, {t}] = {var.X}")
-        for (h, b), var in self.gamma_LT.items():
-            if var.X > 0:
-                print(f"gamma_LT[{h}, {b}] = {var.X}")
-        # print active f variables
-        for (v, i, j, d, s), var in self.f.items():
-            if var.X > 0:
-                print(f"f[{v}, {i}, {j}, {d}, {s}] = {var.X}")
-        #print active delta variables
-        for (v, i, d, s), var in self.delta.items():
-            if var.X > 0:
-                print(f"delta[{v}, {i}, {d}, {s}] = {var.X}")
-                
-    def report_to_csv(self, resultspath, instance=1, runtime=None, write_header=False):
-        """Save a summary row of the solved model to a CSV file."""
 
-        case = self.case
-        scenario = self.scenario
-        model = self.model
-
-        # --- Case identification ---
-        case_id = (
-            f"W{len(case.W)}_B{len(case.B)}_V{case.max_multiday_vessels}"
-            f"_S{len(scenario.scenarios)}_T{len(case.T)}"
-        )
-
-        # --- Active eta (base decisions) ---
-        active_bases = [b for b in case.B if self.eta[b].X > 0.5]
-
-        # --- Active gamma_LT ---
-        lt_parts = []
-        for (h, b), var in self.gamma_LT.items():
-            if var.X > 0.5:
-                lt_parts.append(f"{h}@{b}:{int(round(var.X))}")
-        gamma_lt_str = ", ".join(lt_parts) if lt_parts else "none"
-
-        # --- Active gamma_ST (per period) ---
-        st_parts = []
-        for t in case.T:
-            period_parts = []
-            for h in case.H:
-                for b in case.B:
-                    val = self.gamma_ST[h, b, t].X
-                    if val > 0.5:
-                        period_parts.append(f"{h}@{b}:{int(round(val))}")
-            if period_parts:
-                st_parts.append(f"{t}|{';'.join(period_parts)}")
-        gamma_st_str = ", ".join(st_parts) if st_parts else "none"
-
-        # --- Build row ---
-        row = {
-            "case_id": case_id,
-            "case_name": str(case.name),
-            "coalition": case.coalition,
-            "n_scenarios": len(scenario.scenarios),
-            "instance": instance,
-            "objective": model.ObjVal if model.SolCount > 0 else None,
-            "mip_gap": model.MIPGap if model.SolCount > 0 else None,
-            "runtime": round(runtime, 2) if runtime is not None else round(model.Runtime, 2),
-            "n_variables": model.NumVars,
-            "n_constraints": model.NumConstrs,
-            "base_decision": ",".join(active_bases) if active_bases else "none",
-            "gamma_LT_decision": gamma_lt_str,
-            "gamma_ST_decision": gamma_st_str,
-            "wind_farms": ",".join(case.W),
-            "bases": ",".join(case.B),
-            "max_multiday_vessels": case.max_multiday_vessels,
-            "scenario_seeds": ",".join(str(s) for s in scenario.scenarios),
-            "n_periods": len(case.T),
-            "days_per_period": case.days_per_period,
-            "one_base": case.one_base,
-            "n_vessels_ub_ST": case.n_vessels_ub_ST,
-            "n_vessels_ub_LT": case.n_vessels_ub_LT,
-
-        }
-
-        # --- Write (create or append) ---
-        from pathlib import Path
-        Path(resultspath).parent.mkdir(parents=True, exist_ok=True)
-
-        mode = "w" if write_header else "a"
-        with open(resultspath, mode, newline="") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=row.keys())
-            if write_header:
-                writer.writeheader()
-            writer.writerow(row)
-
-    def update_fixed_decisions(self, fixed_decisions, *, strict=True, use_start=False):
-        """
-        fixed_decisions: dict[tuple[str, tuple], int|float]
-        f.eks. {("eta", ("1",)): 1, ("gamma_LT", ("SOV","1")): 4, ("gamma_ST", ("CTV","1",2)): 0}
-        """
-        if self.model is None:
-            raise RuntimeError("Model not built. Call build_model() first.")
-
-        for (group, key), value in fixed_decisions.items():
-            try:
-                vardict = getattr(self, group)  # e.g. self.eta, self.gamma_LT
-            except AttributeError:
-                if strict:
-                    raise ValueError(f"Unknown variable group: {group}")
-                continue
-
-            try:
-                var = vardict[key]  # tupledict supports tuple keys
-            except KeyError:
-                if strict:
-                    raise KeyError(f"Variable not found: {group}{key}")
-                continue
-
-            var.LB = value
-            var.UB = value
-            if use_start:
-                var.Start = value
-
-        self.model.update()
-
-    def get_solution(self, which="all", *, include_zero=True, tol=1e-9):
-        """
-        Retrieve solution values.
-
-        which:
-            - "all": returns dict[varName -> value] for all vars in model
-            - "first_stage": returns only gamma_ST, gamma_LT, alpha, eta
-            - "second_stage": returns x, delta, lmbd_S, lmbd_M, z, b, f, r_S, r_E
-
-        include_zero:
-            If False: only include variables with |X| > tol (much smaller dicts)
-        """
-        if self.model is None:
-            raise RuntimeError("Model not built. Call build_model() first.")
-
-        # Ensure we actually have a solution
-        if self.model.SolCount == 0:
-            raise RuntimeError(f"No solution available. Status={self.model.Status}")
-
-        def extract(var_dict):
-            out = {}
-            for key, var in var_dict.items():
-                val = var.X
-                if include_zero or abs(val) > tol:
-                    out[var.VarName] = val
-            return out
-
-        if which == "all":
-            if include_zero:
-                return {v.VarName: v.X for v in self.model.getVars()}
-            else:
-                return {v.VarName: v.X for v in self.model.getVars() if abs(v.X) > tol}
-
-        elif which == "first_stage":
-            sol = {}
-            sol.update(extract(self.gamma_ST))
-            sol.update(extract(self.gamma_LT))
-            sol.update(extract(self.alpha))
-            sol.update(extract(self.eta))
-            return sol
-
-        elif which == "second_stage":
-            sol = {}
-            sol.update(extract(self.x))
-            sol.update(extract(self.delta))
-            sol.update(extract(self.lmbd_S))
-            sol.update(extract(self.lmbd_M))
-            sol.update(extract(self.z))
-            sol.update(extract(self.b))
-            sol.update(extract(self.f))
-            sol.update(extract(self.r_S))
-            sol.update(extract(self.r_E))
-            return sol
-
-        else:
-            raise ValueError("which must be one of: 'all', 'first_stage', 'second_stage'.")

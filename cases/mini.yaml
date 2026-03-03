@@ -13,7 +13,7 @@ max_multiday_vessels: 5
 
 bases: ["1", "3"]
 
-periods: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+periods: ["Jan", "Feb", "Mar"]
 
 n_vessels_ub_ST: 3
 
@@ -21,8 +21,7 @@ n_vessels_ub_LT: 3
 
 one_base: True
 
-days_per_period: 30
+days_per_period: 20
 
 wind_farms: ["A", "B"]
 
-maintenance_categories: ["Annual Service", "Manual Reset"]
