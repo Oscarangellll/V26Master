@@ -7,7 +7,7 @@ import gurobipy as gp
 from config import CaseConfig, ScenarioConfig
 
 class OptimizationModel:
-    def __init__(self, case: CaseConfig, scenario: ScenarioConfig, scenario_ids: [int]):
+    def __init__(self, case: CaseConfig, scenario: ScenarioConfig, scenario_ids: list[int]):
         self.case = case
         self.scenario = scenario
         self.scenario_ids = scenario_ids
@@ -119,15 +119,16 @@ class OptimizationModel:
         D = self.case.D
         D_t = self.case.D_t
         D_T = self.case.D_T
-        K_S = self.scenario.get_KS_for_scenarios(self.scenario_ids)
-        K_M = self.scenario.K_M
-        S = self.scenario.S
+        K_S = dict(self.scenario.get_KS_for_scenarios(self.scenario_ids))
+        K_M = dict(self.scenario.get_KM_for_scenarios(self.scenario_ids))
+        
+        S = self.scenario_ids
         
         # Second stage parameters
-        F = self.scenario.F
+        F = dict(self.scenario.get_F_for_scenarios(self.scenario_ids))
         N = self.case.N
         P = self.scenario.P
-        C_D = self.scenario.C_D
+        C_D = dict(self.scenario.get_CD_for_scenarios(self.scenario_ids))
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
