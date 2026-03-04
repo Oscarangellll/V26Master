@@ -46,7 +46,7 @@ price_model = PriceModel()
 
 case = CaseConfig(f"cases/{args.case}.yaml")
 
-master_seed = 40 
+master_seed = 50 
 master_rng = np.random.default_rng(master_seed)
 
 scenario_tree_sizes = args.scenario_tree_sizes
@@ -87,6 +87,7 @@ for i, scenario_tree_size in enumerate(scenario_tree_sizes):
         model = OptimizationModel(case, scenario, s)
         model.build_model()
         model.model.Params.OutputFlag = 0
+        model.model.TimeLimit = 7200
         model.model.Params.MIPGap = 0.01
 
         model.optimize()
@@ -124,12 +125,12 @@ with results_path.open(mode, newline="") as f:
         ])
 
 # The true distribution is the same for all solutions
-true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=50, replace=False)
+true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=100, replace=False)
 scenario = ScenarioConfig(case, weather_model, price_model, true_distribution)
 def evaluate_solution(solution):
     obj = 0
     for s in true_distribution:
-    
+        
         model = OptimizationModel(case, scenario, [s])
         model.build_model()
 
