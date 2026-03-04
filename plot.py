@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from data.fixed_data import data
-from models import WeatherModel, PriceModel
+from scenario_models import WeatherModel, PriceModel
 from scenarios.gen_windows import _find_window 
 
 rng = np.random.default_rng(seed=5)
@@ -163,12 +163,7 @@ if False:
 #### Prices
 price_model = PriceModel()
 if True:
-    price_filehash = hash_electricity_prices(
-        {w.iso for w in data.wind_farms},
-        data.electricity_price_from_year,
-        data.electricity_price_to_year
-    )
-    price_filepath = f"data/electricity/{price_filehash}.csv"
+    price_filepath = f"data/electricity/{data.price_data_hash}.csv"
 
     df_price = pd.read_csv(
         price_filepath,
