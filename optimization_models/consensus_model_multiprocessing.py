@@ -54,17 +54,15 @@ class ConsensusModel:
     def __init__(
         self,
         case,
+        scenario,
         judge_seeds_1scenario_each: List[int],
-        weather_model,
-        price_model,
         *,
         mip_gap_judges: float = 0.01,
         cap_workers: int = 12,
         log: bool = True,
     ):
         self.case = case
-        self.weather_model = weather_model
-        self.price_model = price_model
+        self.scenario = scenario
         
         self.judge_seeds = list(judge_seeds_1scenario_each)
         self.judges: List[Tuple[int]] = [(s,) for s in self.judge_seeds]
@@ -75,8 +73,7 @@ class ConsensusModel:
         print(f" using judge seeds: {self.judge_seeds}")
         self.pool = JudgePool(
             case=case,
-            weather_model=weather_model,
-            price_model=price_model,
+            scenario=scenario,
             judge_seeds=self.judge_seeds,
             mip_gap_judges=mip_gap_judges,
             cap_workers=cap_workers,
@@ -487,11 +484,9 @@ class ConsensusModel:
         # IMPORTANT: stop pool first so master can use threads freely
         self.close()
         
-        from config.scenario_config import ScenarioConfig
         from optimization_models.optimization_model import OptimizationModel
         
-        master_cfg = ScenarioConfig(self.case, self.weather_model, self.price_model, scenarios=master_scenarios)
-        master = OptimizationModel(self.case, master_cfg)
+        master = OptimizationModel(self.case, self.scenario, master_scenarios)
         master.build_model()
         master.model.setParam("MIPGap", float(mip_gap_master))
         master.model.setParam("Threads", 0)  # use all cores

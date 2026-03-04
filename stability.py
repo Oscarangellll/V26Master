@@ -7,7 +7,7 @@ import numpy as np
 
 from config import CaseConfig, ScenarioConfig
 from scenario_models import PriceModel, WeatherModel
-from optimization_models.optimization_model1 import OptimizationModel
+from optimization_models.optimization_model import OptimizationModel
 
 parser = argparse.ArgumentParser()
 

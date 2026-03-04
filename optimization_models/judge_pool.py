@@ -6,16 +6,14 @@ import multiprocessing as mp
 from dataclasses import asdict
 from typing import Any, Dict, List, Tuple, Optional
 
-from config.case_config import CaseConfig
-from scenario_models.price_model import PriceModel
-from scenario_models.weather_model import WeatherModel
+from config import CaseConfig, ScenarioConfig
+
 
 _WORKER: Dict[str, Any] = {} 
 
 def _init_worker(
     case: CaseConfig,
-    weather_model: WeatherModel,
-    price_model: PriceModel,
+    scenario: ScenarioConfig,
     judge_seed: int,
     mip_gap: float,
 ):
@@ -23,11 +21,9 @@ def _init_worker(
     Runs once per worker process.
     Builds judge OptimizationModel and stores it in _WORKER.
     """
-    from config.scenario_config import ScenarioConfig
     from optimization_models.optimization_model import OptimizationModel
 
-    scenario_cfg = ScenarioConfig(case, weather_model, price_model, scenarios=[judge_seed])
-    m = OptimizationModel(case, scenario_cfg)
+    m = OptimizationModel(case, scenario, [judge_seed])
     m.build_model()
 
     m.model.setParam("MIPGap", float(mip_gap))
@@ -104,8 +100,7 @@ class JudgePool:
     def __init__(
         self,
         case: CaseConfig,
-        weather_model: WeatherModel,
-        price_model: PriceModel,
+        scenario: ScenarioConfig,
         judge_seeds: List[int],
         *,
         mip_gap_judges: float,
@@ -113,8 +108,7 @@ class JudgePool:
         mp_start_method: str = "spawn",  # safest with Gurobi
     ):
         self.case = case
-        self.weather_model = weather_model
-        self.price_model = price_model
+        self.scenario = scenario
         self.judge_seeds = list(judge_seeds)
         self.mip_gap_judges = float(mip_gap_judges)
         self.cap_workers = int(cap_workers)
@@ -150,11 +144,11 @@ class JudgePool:
         # So we build one pool PER JUDGE? No. Instead: build n_j pools of 1 process each (still ok up to 20).
         # With 20 judges, 20 pools is fine; overhead is small compared to MIP solves.
 
-        for seed in self.judge_seeds:
+        for judge_seed in self.judge_seeds:
             pool = self._ctx.Pool( 
                 processes=1,
                 initializer=_init_worker, 
-                initargs=(self.case, self.weather_model, self.price_model, seed, self.mip_gap_judges),
+                initargs=(self.case, self.scenario, judge_seed, self.mip_gap_judges),
             )
             self._pools.append(pool)
 

@@ -93,19 +93,16 @@ if __name__ == '__main__':
         case = CaseConfig(case_path=case_path, wind_farm_names=coalition)
         
         for instance in range(1, args.n_instances + 1):
+            scenarios = scenario_seeds[instance - 1]
+            scenario = ScenarioConfig(case, weather_model, price_model, scenarios=scenarios)
             
             if args.method == "mip":
-            
-                scenarios = scenario_seeds[instance - 1]
-
-                scenario = ScenarioConfig(case, weather_model, price_model, scenarios=scenarios)
-
-                model = OptimizationModel(case, scenario)
+                model = OptimizationModel(case, scenario, scenarios)
                         
                 model.build_model()
                 
                 model.model.setParam("OutputFlag", 0)
-                model.model.setParam("MIPGap", 0.01) # 1% optimality gap
+                model.model.setParam("MIPGap", 0.002) # 1% optimality gap
                 model.model.setParam("TimeLimit", 14400) # 4 hours time limit per instance
                 
                 model.model.optimize()
@@ -114,14 +111,13 @@ if __name__ == '__main__':
                 first_row = False
             
             elif args.method == "con":
-                judge_seeds = scenario_seeds[instance - 1]
+                judge_seeds = scenarios
                 master_scenarios = judge_seeds[:]
 
                 cm = ConsensusModel(
                     case,
+                    scenario,
                     judge_seeds_1scenario_each=judge_seeds,
-                    weather_model=weather_model,
-                    price_model=price_model,
                     mip_gap_judges=0.01,
                     log=False,
                 )

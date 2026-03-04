@@ -39,16 +39,16 @@ class OptimizationModel:
             for t in T:
                 for h in self.case.vessel_types:
                     if h.multiday:
-                        gamma_ST[h.name, b, t] = model.addVar(ub=self.case.n_vessels_ub_ST_multi)
+                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_multi)
                         
                     else:
-                        gamma_ST[h.name, b, t] = model.addVar(ub=self.case.n_vessels_ub_ST_single)
+                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_single)
         for b in B:
             for h in self.case.vessel_types:
                 if h.multiday:
-                    gamma_LT[h.name, b] = model.addVar(ub=self.case.n_vessels_ub_LT_multi)
+                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_multi)
                 else:
-                    gamma_LT[h.name, b] = model.addVar(ub=self.case.n_vessels_ub_LT_single)
+                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_single)
 
         alpha = model.addVars(
             ((v, b, t) 
