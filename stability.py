@@ -7,7 +7,7 @@ import numpy as np
 
 from config import CaseConfig, ScenarioConfig
 from scenario_models import PriceModel, WeatherModel
-from optimization_models.optimization_model import OptimizationModel
+from optimization_models import OptimizationModel
 
 parser = argparse.ArgumentParser()
 
@@ -46,7 +46,7 @@ price_model = PriceModel()
 
 case = CaseConfig(f"cases/{args.case}.yaml")
 
-master_seed = 30
+master_seed = 40 
 master_rng = np.random.default_rng(master_seed)
 
 scenario_tree_sizes = args.scenario_tree_sizes
@@ -63,11 +63,16 @@ var_groups = ["eta", "gamma_LT", "gamma_ST", "alpha"]
 results_path = Path("results/stability") / args.case / args.method / "ISS.csv"
 results_path.parent.mkdir(parents=True, exist_ok=True)
 
-with results_path.open("w", newline="") as f:
+file_exists = results_path.exists()
+mode = "a" if file_exists else "w"
+
+with results_path.open(mode, newline="") as f:
     writer = csv.writer(f)
-    writer.writerow([
-        "tree_size", "objective", "runtime", "MIPGap"
-    ])
+
+    if not file_exists:
+        writer.writerow([
+            "tree_size", "objective", "runtime", "MIPGap"
+        ])
 
 for i, scenario_tree_size in enumerate(scenario_tree_sizes):
      
@@ -75,14 +80,14 @@ for i, scenario_tree_size in enumerate(scenario_tree_sizes):
     for j in range(n_trees):
         
         # These scenario seeds are unique within a single model
-        s = rng.choice(100, size=scenario_tree_size, replace=False)    
+        s = rng.choice(1000, size=scenario_tree_size, replace=False)    
         
         scenario = ScenarioConfig(case, weather_model, price_model, s)
 
-        model = OptimizationModel(case, scenario)
-
-        model.Params.OutputFlag = 0
-        model.Params.MIPGap = 0.01
+        model = OptimizationModel(case, scenario, s)
+        model.build_model()
+        model.model.Params.OutputFlag = 0
+        model.model.Params.MIPGap = 0.01
 
         model.optimize()
 
@@ -104,43 +109,39 @@ for i, scenario_tree_size in enumerate(scenario_tree_sizes):
             ])
 
 
-unique_counts = {
-    st_size: len(counter)
-    for st_size, counter in cache.items()
-}
-print(unique_counts)
-for st_size, counter in cache.items():
-    print(f"\nTree size {st_size}")
-    for sol, count in counter.most_common():
-        print(f"  count={count}")
-
 results_path = Path("results/stability") / args.case / args.method / "OSS.csv"
 results_path.parent.mkdir(parents=True, exist_ok=True)
 
-with results_path.open("w", newline="") as f:
+file_exists = results_path.exists()
+mode = "a" if file_exists else "w"
+
+with results_path.open(mode, newline="") as f:
     writer = csv.writer(f)
-    writer.writerow([
-        "tree_size", "count", "objective"
-    ])
+    
+    if not file_exists:
+        writer.writerow([
+            "tree_size", "count", "objective", "gamma_LT", "gamma_ST"
+        ])
 
 # The true distribution is the same for all solutions
-true_distribution = master_rng.choice(np.arange(101, 1_000), size=50, replace=False)
+true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=50, replace=False)
+scenario = ScenarioConfig(case, weather_model, price_model, true_distribution)
 def evaluate_solution(solution):
     obj = 0
     for s in true_distribution:
-        scenario = ScenarioConfig(case, weather_model, price_model, [s])
     
-        model = OptimizationModel(case, scenario)
+        model = OptimizationModel(case, scenario, [s])
+        model.build_model()
 
         for (group, key), val in solution:
             var = getattr(model, group)[key]
             var.LB = val
             var.UB = val
-        model.Params.OutputFlag = 0
-        model.Params.MIPGap = 0.01
+        model.model.Params.OutputFlag = 0
+        model.model.Params.MIPGap = 0.01
 
         model.optimize()
-        obj += model.ObjVal
+        obj += model.model.ObjVal
 
     return obj / len(true_distribution) 
 
@@ -154,7 +155,15 @@ for tree_size, counter in cache.items():
         else:
             obj = evaluate_solution(solution)
             evaluated_solutions[solution] = obj
+
+        gamma_LT_str = ";".join(f"{key}:{val}"
+            for (var_group, key), val in solution
+            if var_group == "gamma_LT" and val > 0)
+
+        gamma_ST_str = ";".join(f"{key}:{val}"
+            for (var_group, key), val in solution
+            if var_group == "gamma_ST" and val > 0)
     
         with results_path.open("a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([tree_size, count, obj])
+            writer.writerow([tree_size, count, obj, gamma_LT_str, gamma_ST_str])

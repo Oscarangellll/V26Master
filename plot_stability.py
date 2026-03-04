@@ -7,7 +7,12 @@ oss = pd.read_csv("results/stability/mini/mip/OSS.csv")
 
 # Compute average objective per tree size
 iss_avg = iss.groupby("tree_size")["objective"].mean().reset_index()
-oss_avg = oss.groupby("tree_size")["objective"].mean().reset_index()
+oss_avg = (
+    oss.assign(weighted_obj=lambda df: df["objective"] * df["count"])
+       .groupby("tree_size", as_index=False)
+       .apply(lambda g: g["weighted_obj"].sum() / g["count"].sum())
+       .rename(columns={None: "objective"})
+)
 
 # Create scatter plot
 plt.figure(figsize=(8,5))
