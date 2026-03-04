@@ -7,9 +7,10 @@ import gurobipy as gp
 from config import CaseConfig, ScenarioConfig
 
 class OptimizationModel:
-    def __init__(self, case: CaseConfig, scenario: ScenarioConfig):
+    def __init__(self, case: CaseConfig, scenario: ScenarioConfig, scenario_ids: [int]):
         self.case = case
         self.scenario = scenario
+        self.scenario_ids = scenario_ids
     
     def build_model(self):
         
@@ -118,7 +119,7 @@ class OptimizationModel:
         D = self.case.D
         D_t = self.case.D_t
         D_T = self.case.D_T
-        K_S = self.scenario.K_S
+        K_S = self.scenario.get_KS_for_scenarios(self.scenario_ids)
         K_M = self.scenario.K_M
         S = self.scenario.S
         

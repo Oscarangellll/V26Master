@@ -43,7 +43,10 @@ class ScenarioConfig:
         # print("------------------------------------")
         # print(self.F)
         # print("------------------------------------")
-        
+    def get_KS_for_scenarios(scenario_list):
+        for (h, b, w, d, s), value in self.K_S.items():
+            if s, in scenario_list:
+                yield key, value        
 
     def make_singleday_pattern_set(self):
         K = {}
