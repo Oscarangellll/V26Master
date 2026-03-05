@@ -99,9 +99,9 @@ if __name__ == '__main__':
                 model.build_model()
                 
                 model.model.setParam("OutputFlag", 0)
-                model.model.setParam("MIPGap", 0.002) # 1% optimality gap
+                model.model.setParam("MIPGap", 0.01) # 1% optimality gap
                 model.model.setParam("TimeLimit", 14400) # 4 hours time limit per instance
-                
+                model.model.setParam("Threads", 1)  # use single thread 
                 model.model.optimize()
                 
                 model.report_to_csv(resultspath, instance=instance, runtime=None, write_header=first_row)

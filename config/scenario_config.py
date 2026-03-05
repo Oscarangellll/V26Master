@@ -3,7 +3,7 @@ import numpy as np
 from scenario_models import PriceModel, WeatherModel
 from .patterns import gen_patterns
 from .weather_windows import find_weather_windows
-from .scenario_config import perform_scenario_reduction
+from .scenario_reduction import perform_scenario_reduction
 
 class ScenarioConfig:
     def __init__(self, case, scenarios: list[int], scenario_reduction: bool = False):
@@ -51,7 +51,6 @@ class ScenarioConfig:
             self.C_D = downtime_costs
             self.F = failures
             self.S = scenarios
-            self.scenario_weights = {s: 1 / len(scenarios) for s in scenarios}
             
     
     def get_KS_for_scenarios(self, scenario_list):
