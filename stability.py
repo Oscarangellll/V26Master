@@ -87,7 +87,7 @@ for i, scenario_tree_size in enumerate(scenario_tree_sizes):
         model = OptimizationModel(case, scenario, s)
         model.build_model()
         model.model.Params.OutputFlag = 0
-        model.model.TimeLimit = 7200
+        model.model.Params.TimeLimit = 7200
         model.model.Params.MIPGap = 0.01
 
         model.optimize()
@@ -139,6 +139,7 @@ def evaluate_solution(solution):
             var.LB = val
             var.UB = val
         model.model.Params.OutputFlag = 0
+        model.model.Params.TimeLimit = 7200
         model.model.Params.MIPGap = 0.01
 
         model.optimize()
