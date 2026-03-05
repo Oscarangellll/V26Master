@@ -1,16 +1,18 @@
 import numpy as np
 from scenarios.gen_patterns import gen_patterns
-
-# from scenarios.gen_patterns import gen_patterns
+from scenario_models import WeatherModel, PriceModel
+from scenarios.gen_windows import find_weather_windows
+from scenario_reduction import scenario_reduction as perform_scenario_reduction
 
 class ScenarioConfig:
 
-    def __init__(self, case, weather_model, price_model, scenarios: list[int]):
+    def __init__(self, case, scenarios: list[int], scenario_reduction: bool = False):
 
         self.case = case        
-        self.weather_model = weather_model
-        self.price_model = price_model
+        self.weather_model = WeatherModel()
+        self.price_model = PriceModel()
         self.scenarios = scenarios
+        self.scenario_reduction = scenario_reduction
 
         weather = {}
         prices = {}
@@ -19,31 +21,39 @@ class ScenarioConfig:
             rng = np.random.default_rng(seed=s)
             for iso in case.all_wl_ids_for_iso.keys():
                 for loc in case.all_wl_ids_for_iso[iso]:
-                    weather[(s, iso, loc)] = weather_model.simulate(loc, rng, case.periods, case.days_per_period)
+                    weather[(s, iso, loc)] = self.weather_model.simulate(loc, rng, case.periods, case.days_per_period)
                 iso3_wind_speeds = np.array([weather[s, iso, loc][:,0] for loc in sorted(case.all_wl_ids_for_iso[iso])]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
                 iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
                 #print iso3 weather first 20 rows with corresponding scenario
-                prices[s, iso] = price_model.simulate(iso3_wind_speeds, iso, rng, case.periods, case.days_per_period)
-        # print("rett før patterns skal lages")
-        self.K_S, self.K_M, self.P = gen_patterns(weather, case, scenarios)
-        self.S = scenarios
-        # print("rett etter patterns er laget")
-        self.C_D = self.make_downtime_costs(weather, prices)
-        self.F = self.make_failures()
-        # print("scencon prints:")
-        # print(self.K_S)
-        # print("------------------------------------")
-        # print(self.K_M)
-        # print("------------------------------------")
-        # print(self.P)
-        # print("------------------------------------")
-        # print(prices)
-        # print("------------------------------------")
-        # print(self.C_D)
-        # print("------------------------------------")
-        # print(self.F)
-        # print("------------------------------------")
-    
+                prices[s, iso] = self.price_model.simulate(iso3_wind_speeds, iso, rng, case.periods, case.days_per_period)
+        
+        weather_windows = find_weather_windows(case, weather, scenarios)
+        downtime_costs = self.make_downtime_costs(weather, prices)
+        failures = self.make_failures()
+        
+        if scenario_reduction:
+            medoid_ids, weights, X_scaled = perform_scenario_reduction(
+                case=case,
+                scenario_ids=scenarios,
+                weather_windows=weather_windows,
+                downtime_costs=downtime_costs,
+                failures=failures,
+                n_reduced_scenarios=12
+            )
+            weather_windows_reduced = {k: v for k, v in weather_windows.items() if k[3] in medoid_ids}
+            self.C_D = {k: v for k, v in downtime_costs.items() if k[2] in medoid_ids}
+            self.F = {k: v for k, v in failures.items() if k[3] in medoid_ids}
+        
+            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, case, scenarios)
+            self.S = medoid_ids
+            self.scenario_weights = {s: weights[s] for s in medoid_ids}
+        else:
+            self.K_S, self.K_M, self.P = gen_patterns(weather_windows, case, scenarios)
+            self.C_D = downtime_costs
+            self.F = failures
+            self.S = scenarios
+            self.scenario_weights = {s: 1 / len(scenarios) for s in scenarios}
+            
     def get_KS_for_scenarios(self, scenario_list):
         for (h, b, w, d, s), value in self.K_S.items():
             if s in scenario_list:

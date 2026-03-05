@@ -94,7 +94,7 @@ if __name__ == '__main__':
         
         for instance in range(1, args.n_instances + 1):
             scenarios = scenario_seeds[instance - 1]
-            scenario = ScenarioConfig(case, weather_model, price_model, scenarios=scenarios)
+            scenario = ScenarioConfig(case, scenarios=scenarios)
             
             if args.method == "mip":
                 model = OptimizationModel(case, scenario, scenarios)
@@ -111,7 +111,7 @@ if __name__ == '__main__':
                 first_row = False
             
             elif args.method == "con":
-                judge_seeds = scenarios
+                judge_seeds = scenario.S
                 master_scenarios = judge_seeds[:]
 
                 cm = ConsensusModel(
@@ -122,18 +122,18 @@ if __name__ == '__main__':
                     log=False,
                 )
 
-                model, fix, runtime = cm.optimize(
+                model, runtime = cm.optimize(
                     master_scenarios=master_scenarios,
                     eta_max_iters=50,
                     lt_max_iters=200,
                     top_k_eta=1,
                     top_k_lt=1,
                     min_p=0.6,
-                    max_p=0.95,
+                    max_p=0.99,
                     aggregator="mean",
                     tighten_ub_st=True,
                     unanim_fix_zero_st=True,
-                    mip_gap_master=0.002,
+                    mip_gap_master=0.01,
                 )
                 
                 model.report_to_csv(resultspath, instance=instance, runtime=runtime, write_header=first_row)

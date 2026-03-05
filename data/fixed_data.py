@@ -175,18 +175,18 @@ class FixedData:
             vessel_types=["CTV", "SOV"]
         ),
         MaintenanceCategory("Minor Repair", 
-            failure_rate=3,
-            duration=7.5,
+            failure_rate=6,
+            duration=3.725,
             vessel_types=["CTV", "SOV"]
         ),
         MaintenanceCategory("Medium Repair", 
-            failure_rate=0.825,
-            duration=7.33,
+            failure_rate= 1.65,
+            duration=3.66,
             vessel_types=["CTV", "SOV"]
         ),
         MaintenanceCategory("Severe Repair", 
-                failure_rate=0.12,
-                duration=8.66,
+                failure_rate=0.24,
+                duration=4.33,
                 vessel_types=["CTV", "SOV"]
             ),
         ]
@@ -199,7 +199,7 @@ class FixedData:
     upper_bound_weather_window = 15
 
     travel_threshold_hours = 12
-   
+
     def weather_location_hash(self, wl):
         s = f"{wl.id}_{wl.lat}_{wl.lon}_{self.weather_from_year}_{self.weather_to_year}"
         return hashlib.sha256(s.encode()).hexdigest()[:10]

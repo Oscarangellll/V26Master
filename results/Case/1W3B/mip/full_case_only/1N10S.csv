@@ -1,2 +1,0 @@
-case_id,case_name,coalition,n_scenarios,instance,objective,mip_gap,runtime,n_variables,n_constraints,base_decision,gamma_LT_decision,gamma_ST_decision,wind_farms,bases,scenario_seeds,n_periods,days_per_period,one_base,n_vessels_ub_ST_multi,n_vessels_ub_ST_single,n_vessels_ub_LT_multi,n_vessels_ub_LT_single
-W1_B3_V3_S10_T12,1W3B,A,10,1,19777571.47135595,0.001074975217644684,103.84,260910,153393,1,SOV@1:1,none,A,"3,2,1","264,652,198,764,939,459,89,655,17,364",12,30,True,1,4,2,8

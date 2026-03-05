@@ -513,8 +513,8 @@ class ConsensusModel:
         lt_max_iters: int = 200,
         top_k_eta: int = 1,
         top_k_lt: int = 1,
-        min_p: float = 0.55,
-        max_p: float = 0.95,
+        min_p: float = 0.60,
+        max_p: float = 0.99,
         aggregator: str = "mean",  # consider "median" if objectives noisy
         tighten_ub_st: bool = True,
         unanim_fix_zero_st: bool = True,
@@ -559,7 +559,7 @@ class ConsensusModel:
             mip_gap_master=mip_gap_master,
         )
 
-        return master, fix, self._now()
+        return master, self._now()
 
 
 # # =====================================================================
@@ -597,7 +597,7 @@ class ConsensusModel:
 #         top_k_eta=1,
 #         top_k_lt=1,
 #         min_p=0.6,
-#         max_p=0.95,
+#         max_p=0.99,
 #         aggregator="mean",
 #         tighten_ub_st=True,
 #         unanim_fix_zero_st=True,
