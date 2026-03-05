@@ -1,11 +1,11 @@
 import argparse
 from itertools import combinations
 from pathlib import Path
+
 import numpy as np
+
 from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
-from scenario_models.weather_model import WeatherModel
-from scenario_models.price_model import PriceModel
 from optimization_models.optimization_model import OptimizationModel
 from optimization_models.consensus_model_multiprocessing import ConsensusModel
 
@@ -70,9 +70,6 @@ if __name__ == '__main__':
     else:
         coalitions = [full_case_wind_farm_names]
         folder = "full_case_only"
-
-    weather_model = WeatherModel()
-    price_model = PriceModel()
 
     resultspath = Path("results") / "Case" / args.case / args.method / folder / (Path(f"{args.n_instances}N{args.n_scenarios}S").stem + ".csv")
 

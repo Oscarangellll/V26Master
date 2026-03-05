@@ -1,40 +1,39 @@
 import numpy as np
-from scenarios.gen_patterns import gen_patterns
-from scenario_models import WeatherModel, PriceModel
-from scenarios.gen_windows import find_weather_windows
-from scenario_reduction import scenario_reduction as perform_scenario_reduction
+
+from scenario_models import PriceModel, WeatherModel
+from .patterns import gen_patterns
+from .weather_windows import find_weather_windows
+from .scenario_config import perform_scenario_reduction
 
 class ScenarioConfig:
-
     def __init__(self, case, scenarios: list[int], scenario_reduction: bool = False):
 
         self.case = case        
-        self.weather_model = WeatherModel()
-        self.price_model = PriceModel()
         self.scenarios = scenarios
         self.scenario_reduction = scenario_reduction
+        
+        price_model = PriceModel()
+        weather_model = WeatherModel()
+        
+        # {(s, iso, wl_id): (n_hours, 2) np.array
+        weather = self._make_weather(weather_model) 
+            
+        # {(s, iso): (n_days, n_locations) np.array
+        prices = self._make_prices(weather, price_model) 
+        
+        # {(w, m, d, s): int}
+        failures = self._make_failures()
 
-        weather = {}
-        prices = {}
+        # {(w, d, s): float}} 
+        downtime_costs = self._make_downtime_costs(weather, prices)
         
-        for s in scenarios:
-            rng = np.random.default_rng(seed=s)
-            for iso in case.all_wl_ids_for_iso.keys():
-                for loc in case.all_wl_ids_for_iso[iso]:
-                    weather[(s, iso, loc)] = self.weather_model.simulate(loc, rng, case.periods, case.days_per_period)
-                iso3_wind_speeds = np.array([weather[s, iso, loc][:,0] for loc in sorted(case.all_wl_ids_for_iso[iso])]).T #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
-                iso3_wind_speeds = iso3_wind_speeds.reshape(-1, 24, iso3_wind_speeds.shape[1]).mean(axis=1) #shape (n_days, n_locations)
-                #print iso3 weather first 20 rows with corresponding scenario
-                prices[s, iso] = self.price_model.simulate(iso3_wind_speeds, iso, rng, case.periods, case.days_per_period)
-        
-        weather_windows = find_weather_windows(case, weather, scenarios)
-        downtime_costs = self.make_downtime_costs(weather, prices)
-        failures = self.make_failures()
+        # {(h, w, d, s): int}
+        weather_windows = find_weather_windows(self.case, weather, scenarios)
         
         if scenario_reduction:
             medoid_ids, weights, X_scaled = perform_scenario_reduction(
-                case=case,
-                scenario_ids=scenarios,
+                case=self.case,
+                scenario_ids=self.scenarios,
                 weather_windows=weather_windows,
                 downtime_costs=downtime_costs,
                 failures=failures,
@@ -44,16 +43,17 @@ class ScenarioConfig:
             self.C_D = {k: v for k, v in downtime_costs.items() if k[2] in medoid_ids}
             self.F = {k: v for k, v in failures.items() if k[3] in medoid_ids}
         
-            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, case, scenarios)
+            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, self.case, self.scenarios)
             self.S = medoid_ids
             self.scenario_weights = {s: weights[s] for s in medoid_ids}
         else:
-            self.K_S, self.K_M, self.P = gen_patterns(weather_windows, case, scenarios)
+            self.K_S, self.K_M, self.P = gen_patterns(weather_windows, self.case, self.scenarios)
             self.C_D = downtime_costs
             self.F = failures
             self.S = scenarios
             self.scenario_weights = {s: 1 / len(scenarios) for s in scenarios}
             
+    
     def get_KS_for_scenarios(self, scenario_list):
         for (h, b, w, d, s), value in self.K_S.items():
             if s in scenario_list:
@@ -74,33 +74,56 @@ class ScenarioConfig:
             if s in scenario_list:
                 yield (w, m, d, s), value
 
-    def make_singleday_pattern_set(self):
-        K = {}
+
+    def _make_weather(self, weather_model):
+        weather = {}
+
+        for s in self.scenarios:
+            rng = np.random.default_rng(seed=s)
+
+            for iso in self.case.all_wl_ids_for_iso.keys():
+                for loc in self.case.all_wl_ids_for_iso[iso]:
+                    weather[(s, iso, loc)] = weather_model.simulate(
+                        loc, 
+                        rng, 
+                        self.case.periods, 
+                        self.case.days_per_period
+                    )
+
+        return weather
+               
+    def _make_prices(self, weather, price_model):
+        prices = {}
+
+        for s in self.scenarios:
+            rng = np.random.default_rng(seed=s)
+
+            for iso in self.case.all_wl_ids_for_iso.keys():
+            
+                # Hourly wind speed per location
+                #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
+                # Shape (n_hours, n_locations)
+                iso3_wind_speeds = np.array(
+                    [weather[s, iso, wl_id][:,0] for wl_id in sorted(self.case.all_wl_ids_for_iso[iso])]
+                ).T 
         
-        for h in self.case.vessel_types:
-            if not h.multiday:
-                for b in self.case.bases:
-                    for w in self.case.wind_farms:
-                        for d in self.case.D:
-                            for s in self.scenarios:
-                                K[h.name, b.name, w.name, d, s] = [1]
+                # Average wind speed per day per location
+                # Shape (n_days, n_locations)
+                iso3_wind_speeds = iso3_wind_speeds.reshape(
+                    -1, 24, iso3_wind_speeds.shape[1]
+                ).mean(axis=1) 
 
-        return K
+                prices[s, iso] = price_model.simulate(
+                    iso3_wind_speeds, 
+                    iso, 
+                    rng,    
+                    self.case.periods,   
+                    self.case.days_per_period
+                )
+        
+        return prices
 
-    def make_multiday_pattern_set(self):
-        K = {}
-
-        for h in self.case.vessel_types:
-            if h.multiday:
-                for w in self.case.wind_farms:
-                    for d in self.case.D:
-                        for s in self.scenarios:
-                            K[h.name, w.name, d, s] = [1]
-
-        return K
-
-
-    def make_failures(self):
+    def _make_failures(self):
         F = {}
 
         p = [m.failure_rate / 365 for m in self.case.maintenance_categories]
@@ -119,7 +142,7 @@ class ScenarioConfig:
 
         return F
 
-    def make_downtime_costs(self, weather, prices):
+    def _make_downtime_costs(self, weather, prices):
         C_D = {}
         for w in self.case.wind_farms:
             for s in self.scenarios:

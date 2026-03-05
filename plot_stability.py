@@ -2,8 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the results
-iss = pd.read_csv("results/stability/mini/mip/ISS.csv")
-oss = pd.read_csv("results/stability/mini/mip/OSS.csv")
+iss = pd.read_csv("results/stability/1W3B/mip/ISS.csv")
+oss = pd.read_csv("results/stability/1W3B/mip/OSS.csv")
 
 # Compute average objective per tree size
 iss_avg = iss.groupby("tree_size")["objective"].mean().reset_index()

@@ -75,7 +75,7 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
     return np.array(features)
 
 
-def scenario_reduction(
+def perform_scenario_reduction(
     case, 
     scenario_ids, 
     weather_windows, 

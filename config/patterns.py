@@ -1,7 +1,7 @@
 from typing import Dict, List, Tuple, Optional
 import math
 from dataclasses import dataclass
-from scenarios.gen_windows import find_weather_windows
+from .weather_windows import find_weather_windows
 from haversine import haversine, Unit
 
 def gen_patterns(weather_windows, case, scenarios):

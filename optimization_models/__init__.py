@@ -1,2 +1,2 @@
 from .optimization_model import OptimizationModel
-from .consensus_model import ConsensusModel
+from .consensus_model_multiprocessing import ConsensusModel

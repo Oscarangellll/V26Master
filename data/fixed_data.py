@@ -199,7 +199,11 @@ class FixedData:
     upper_bound_weather_window = 15
 
     travel_threshold_hours = 12
-
+    
+    # 07:00 = 7 etc
+    work_day_start = 7
+    work_day_end = 19
+    
     def weather_location_hash(self, wl):
         s = f"{wl.id}_{wl.lat}_{wl.lon}_{self.weather_from_year}_{self.weather_to_year}"
         return hashlib.sha256(s.encode()).hexdigest()[:10]
