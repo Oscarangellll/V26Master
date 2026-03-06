@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from config import CaseConfig, ScenarioConfig
-from scenario_models import PriceModel, WeatherModel
+from scenario_models import price_model, weather_model
 from optimization_models import OptimizationModel, ConsensusModel
 
 if __name__ == "__main__":
@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     case = CaseConfig(f"cases/{args.case}.yaml")
 
-    master_seed = 50 
+    master_seed = 90 
     master_rng = np.random.default_rng(master_seed)
 
     scenario_tree_sizes = args.scenario_tree_sizes
@@ -62,17 +62,13 @@ if __name__ == "__main__":
     results_path = Path("results/stability") / args.case / args.method / "ISS.csv"
     results_path.parent.mkdir(parents=True, exist_ok=True)
 
-    file_exists = results_path.exists()
-    mode = "a" if file_exists else "w"
-
-    with results_path.open(mode, newline="") as f:
+    with results_path.open("w", newline="") as f:
         writer = csv.writer(f)
+        writer.writerow([
+            "tree_size", "objective", "runtime", "MIPGap"
+        ])
 
-        if not file_exists:
-            writer.writerow([
-                "tree_size", "objective", "runtime", "MIPGap"
-            ])
-
+    exit_loop = False
     for i, scenario_tree_size in enumerate(scenario_tree_sizes):
          
         rng = np.random.default_rng(scenario_tree_size_seeds[i]) 
@@ -86,12 +82,14 @@ if __name__ == "__main__":
                
                 model.build_model()
                 model.model.Params.OutputFlag = 0
-                model.model.Params.TimeLimit = 7200
+                model.model.Params.TimeLimit = 14_400
                 model.model.Params.MIPGap = 0.01
 
                 model.optimize()
 
                 runtime = model.model.Runtime
+                if runtime > 14_400:
+                    exit_loop = True
 
             elif args.method == "con":
                 judge_seeds = scenario.S 
@@ -105,13 +103,17 @@ if __name__ == "__main__":
                 )
                 
                 model, runtime = cm.optimize(master_scenarios)
+            
+            if exit_loop:
+                print(f"Exit on tree size {scenario_tree_size}, tree {j}")
+                break
 
             solution = frozenset(
                 ((var_group, key), int(var.X))
                 for var_group in var_groups
                 for key, var in getattr(model, var_group).items()
             )
-        
+            
             cache[scenario_tree_size][solution] += 1
         
             with results_path.open("a", newline="") as f:
@@ -122,21 +124,17 @@ if __name__ == "__main__":
                     runtime,
                     model.model.MIPGap
                 ])
-
+        if exit_loop:
+            break
 
     results_path = Path("results/stability") / args.case / args.method / "OSS.csv"
     results_path.parent.mkdir(parents=True, exist_ok=True)
 
-    file_exists = results_path.exists()
-    mode = "a" if file_exists else "w"
-
-    with results_path.open(mode, newline="") as f:
+    with results_path.open("w", newline="") as f:
         writer = csv.writer(f)
-        
-        if not file_exists:
-            writer.writerow([
-                "tree_size", "count", "objective", "gamma_LT", "gamma_ST"
-            ])
+        writer.writerow([
+            "tree_size", "count", "objective", "gamma_LT", "gamma_ST"
+        ])
 
     # The true distribution is the same for all solutions
     true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=100, replace=False)
@@ -144,18 +142,16 @@ if __name__ == "__main__":
     def evaluate_solution(solution):
         obj = 0
         for s in true_distribution:
-            
             model = OptimizationModel(case, scenario, [s])
             model.build_model()
-
             for (group, key), val in solution:
                 var = getattr(model, group)[key]
                 var.LB = val
                 var.UB = val
-                model.model.Params.OutputFlag = 0
-            model.model.Params.TimeLimit = 7200
+            
+            model.model.Params.OutputFlag = 0
             model.model.Params.MIPGap = 0.01
-
+            
             model.optimize()
             obj += model.model.ObjVal
 

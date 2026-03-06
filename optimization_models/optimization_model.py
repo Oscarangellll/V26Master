@@ -34,23 +34,9 @@ class OptimizationModel:
         K_REQ = self.case.K_REQ
 
         # First stage variables
-        gamma_ST = {}
-        gamma_LT = {}
-        for b in B:
-            for t in T:
-                for h in self.case.vessel_types:
-                    if h.multiday:
-                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_multi)
+        gamma_ST = model.addVars(H, B, T, vtype=gp.GRB.INTEGER)
+        gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER)
                         
-                    else:
-                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_single)
-        for b in B:
-            for h in self.case.vessel_types:
-                if h.multiday:
-                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_multi)
-                else:
-                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_single)
-
         alpha = model.addVars(
             ((v, b, t) 
             for h in H_M 
@@ -112,6 +98,11 @@ class OptimizationModel:
             for t in T),
             name=f"symmetry_break_ST"
         )
+        
+        if self.case.one_base:
+            model.addConstr(
+                gp.quicksum(eta[b] for b in B) <= 1
+            )
 
         # Second stage sets
         W = self.case.W 
@@ -120,16 +111,16 @@ class OptimizationModel:
         D = self.case.D
         D_t = self.case.D_t
         D_T = self.case.D_T
-        K_S = dict(self.scenario.get_KS_for_scenarios(self.scenario_ids))
-        K_M = dict(self.scenario.get_KM_for_scenarios(self.scenario_ids))
+        K_S = self.scenario.get_KS_for_scenarios(self.scenario_ids)
+        K_M = self.scenario.get_KM_for_scenarios(self.scenario_ids)
         
         S = self.scenario_ids
         
         # Second stage parameters
-        F = dict(self.scenario.get_F_for_scenarios(self.scenario_ids))
+        F = self.scenario.get_F_for_scenarios(self.scenario_ids)
         N = self.case.N
         P = self.scenario.P
-        C_D = dict(self.scenario.get_CD_for_scenarios(self.scenario_ids))
+        C_D = self.scenario.get_CD_for_scenarios(self.scenario_ids)
         C_RT = self.case.C_RT 
         C_T = self.case.C_T
         R = self.case.R
@@ -206,28 +197,26 @@ class OptimizationModel:
 
         # Second-stage objective
         second_obj = (
-            gp.quicksum(self.scenario_weights[s] * (
-                # Downtime costs
-                gp.quicksum(C_D[w, d, s] * b[w, m, d, s]
+                gp.quicksum(self.scenario_weights[s] * C_D[w, d, s] * b[w, m, d, s]
                     for w in W 
                     for m in M 
+                    for s in S
                     for d in D)
-                # Travel cost singleday vessels
-                + gp.quicksum(C_RT[h, b, w] * x[h, b, w, d, s] 
+                # Travel cost singleday vessels(
+                + gp.quicksum(self.scenario_weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
                     for h in H_S 
                     for b in B 
                     for w in W 
+                    for s in S
                     for d in D)
                 # Travel cost multiday vessels
-                + gp.quicksum(C_T[h, i, j] * f[v, i, j, d, s] 
+                + gp.quicksum(self.scenario_weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
                     for h in H_M 
                     for v in V[h] 
                     for i in L for j in L if i != j 
+                    for s in S
                     for d in D)
                 )
-                for s in S
-            )
-        )
 
         # Second stage constraints
         model.addConstrs(
@@ -427,34 +416,7 @@ class OptimizationModel:
         
         model.setObjective(first_obj + second_obj)
         
-        if self.case.one_base:
-            model.addConstr(
-                gp.quicksum(eta[b] for b in B) <= 1
-            )
             
-        # #second stage only:
-        # model.addConstr(
-        #     (eta["1"] == 1)
-        # )
-        # model.addConstrs(
-        #     (gamma_ST[h, b, t] == 0
-        #     for h in H
-        #     for b in B
-        #     for t in T)
-        # )
-        # model.addConstr(
-        #     (gamma_LT["CTV", "1"] == 2)
-        # )
-        # model.addConstr(
-        #     (gamma_LT["SOV", "1"] == 4)
-        # )
-        # model.addConstrs(
-        #     (gamma_LT["CTV", b] == 0
-        #     for b in ["2", "3"])
-        # )
-
-        model.update()
-        
         self.model = model
         
         self.gamma_ST = gamma_ST

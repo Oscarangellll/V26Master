@@ -136,3 +136,4 @@ class WeatherModel:
 
         return y_sim
 
+weather_model = WeatherModel()
