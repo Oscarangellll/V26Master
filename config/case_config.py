@@ -30,11 +30,12 @@ class CaseConfig:
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         )
         
-        self.n_vessels_ub_ST_multi = case["n_vessels_ub_ST_multi"]
-        self.n_vessels_ub_ST_single = case["n_vessels_ub_ST_single"]
+        # self.n_vessels_ub_ST_multi = case["n_vessels_ub_ST_multi"]
+        # self.n_vessels_ub_ST_single = case["n_vessels_ub_ST_single"]
         
-        self.n_vessels_ub_LT_multi = case["n_vessels_ub_LT_multi"]
-        self.n_vessels_ub_LT_single = case["n_vessels_ub_LT_single"]
+        # self.n_vessels_ub_LT_multi = case["n_vessels_ub_LT_multi"]
+        # self.n_vessels_ub_LT_single = case["n_vessels_ub_LT_single"]
+        self.max_multiday_vessels = case["max_multiday_vessels"]
 
         self.one_base = case["one_base"]
         
@@ -84,7 +85,7 @@ class CaseConfig:
     @property
     def V(self):
         return {
-            h: [f"{h}{i + 1}" for i in range(self.n_vessels_ub_ST_multi + self.n_vessels_ub_LT_multi)]
+            h: [f"{h}{i + 1}" for i in range(self.max_multiday_vessels)]
             for h in self.H_M
         }
 

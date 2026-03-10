@@ -12,11 +12,7 @@
 
 bases: ["1", "2", "3"] #, "4", "5"]
 
-n_vessels_ub_LT_multi: 3
-n_vessels_ub_LT_single: 12
-
-n_vessels_ub_ST_multi: 2
-n_vessels_ub_ST_single: 8
+max_multiday_vessels: 3
 
 one_base: True
 

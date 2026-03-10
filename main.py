@@ -57,6 +57,12 @@ if __name__ == '__main__':
         action="store_true",
         help="Whether to iterate over coalitions"
     )
+    
+    parser.add_argument(
+        "--r", "--scenario_reduction",
+        action="store_true",
+        help="Whether to perform scenario reduction"
+    )
 
     args = parser.parse_args()
     case_path = Path(f"cases/{args.case}.yaml")
@@ -75,6 +81,7 @@ if __name__ == '__main__':
 
     master_seed = 22
     master_rng = np.random.default_rng(master_seed)
+    scenario_reduction = args.r
 
     # Pre-generate scenario seeds so every coalition uses the same ones
     scenario_seeds = [  
@@ -91,17 +98,17 @@ if __name__ == '__main__':
         
         for instance in range(1, args.n_instances + 1):
             scenarios = scenario_seeds[instance - 1]
-            scenario = ScenarioConfig(case, scenarios=scenarios)
+            scenario = ScenarioConfig(case, scenarios=scenarios, scenario_reduction=scenario_reduction)
             
             if args.method == "mip":
                 model = OptimizationModel(case, scenario, scenarios)
                         
                 model.build_model()
                 
-                model.model.setParam("OutputFlag", 0)
-                model.model.setParam("MIPGap", 0.01) # 1% optimality gap
+                model.model.setParam("OutputFlag", 1)
+                model.model.setParam("MIPGap", 0.02) # 1% optimality gap
                 model.model.setParam("TimeLimit", 14400) # 4 hours time limit per instance
-                model.model.setParam("Threads", 1)  # use single thread 
+                # model.model.setParam("Threads", 1)  # use single thread 
                 model.model.optimize()
                 
                 model.report_to_csv(resultspath, instance=instance, runtime=None, write_header=first_row)

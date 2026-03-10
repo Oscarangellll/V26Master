@@ -18,10 +18,10 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
     """
     Build a single feature vector for one scenario.
     
-    Features: period aggregates of:
-        - operable hours per vessel type per park (mean, std, q10)
-        - downtime cost per park (mean)
-        - failures per park per maintenance type (mean)
+    Features per period (month):
+        - weather windows per vessel type per park: mean, std, q10  (|H| × |W| × |T| × 3)
+        - downtime cost per park: mean, std                         (|W| × |T| × 2)
+        - failures per park per maintenance type: mean              (|W| × |M| × |T|)
     
     Returns: 1D array of concatenated features
     """
@@ -30,47 +30,37 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
     # Use case.D_t to get {period_name: [days_in_period]}
     periods = case.D_t
     
-    # 1. Weather windows: operable hours per (vessel_type, park)
+    # 1. Weather windows: mean, std, q10 per period per (vessel_type, park)
     for h in case.vessel_types:
         for w in case.wind_farms:
-            period_windows = []
             for period_name, days_in_period in periods.items():
                 windows_this_period = [
                     weather_windows.get((h.name, w.name, d, scenario_id), 0)
                     for d in days_in_period
                 ]
-                period_windows.append(np.mean(windows_this_period))
-            
-            # Features: mean, std, q10 across periods
-            features.append(np.mean(period_windows))
-            features.append(np.std(period_windows))
-            features.append(np.quantile(period_windows, 0.1))
+                features.append(np.mean(windows_this_period))
+                features.append(np.std(windows_this_period))
+                features.append(np.quantile(windows_this_period, 0.1))
     
-    # 2. Downtime costs per park
+    # 2. Downtime costs: mean, std per period per park
     for w in case.wind_farms:
-        period_costs = []
         for period_name, days_in_period in periods.items():
             costs_this_period = [
                 downtime_costs.get((w.name, d, scenario_id), 0)
                 for d in days_in_period
             ]
-            period_costs.append(np.mean(costs_this_period))
-        
-        features.append(np.mean(period_costs))
-        features.append(np.std(period_costs))
+            features.append(np.mean(costs_this_period))
+            features.append(np.std(costs_this_period))
     
-    # 3. Failures per park per maintenance type
+    # 3. Failures: mean per period per park per maintenance type
     for w in case.wind_farms:
         for m in case.maintenance_categories:
-            period_failures = []
             for period_name, days_in_period in periods.items():
                 failures_this_period = [
                     failures.get((w.name, m.name, d, scenario_id), 0)
                     for d in days_in_period
                 ]
-                period_failures.append(np.mean(failures_this_period))
-            
-            features.append(np.mean(period_failures))
+                features.append(np.mean(failures_this_period))
     
     return np.array(features)
 

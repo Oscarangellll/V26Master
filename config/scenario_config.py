@@ -37,13 +37,13 @@ class ScenarioConfig:
                 weather_windows=weather_windows,
                 downtime_costs=downtime_costs,
                 failures=failures,
-                n_reduced_scenarios=12
+                n_reduced_scenarios=6
             )
             weather_windows_reduced = {k: v for k, v in weather_windows.items() if k[3] in medoid_ids}
             self.C_D = {k: v for k, v in downtime_costs.items() if k[2] in medoid_ids}
             self.F = {k: v for k, v in failures.items() if k[3] in medoid_ids}
         
-            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, self.case, self.scenarios)
+            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, self.case, medoid_ids)
             self.S = medoid_ids
             self.scenario_weights = {s: weights[s] for s in medoid_ids}
         else:

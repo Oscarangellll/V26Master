@@ -40,16 +40,16 @@ class OptimizationModel:
             for t in T:
                 for h in self.case.vessel_types:
                     if h.multiday:
-                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_multi)
+                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER)
                         
                     else:
-                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_ST_single)
+                        gamma_ST[h.name, b, t] = model.addVar(vtype=gp.GRB.INTEGER)
         for b in B:
             for h in self.case.vessel_types:
                 if h.multiday:
-                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_multi)
+                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER)
                 else:
-                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER, ub=self.case.n_vessels_ub_LT_single)
+                    gamma_LT[h.name, b] = model.addVar(vtype=gp.GRB.INTEGER)
 
         alpha = model.addVars(
             ((v, b, t) 
@@ -206,28 +206,27 @@ class OptimizationModel:
 
         # Second-stage objective
         second_obj = (
-            gp.quicksum(self.scenario_weights[s] * (
                 # Downtime costs
-                gp.quicksum(C_D[w, d, s] * b[w, m, d, s]
+                gp.quicksum(self.scenario_weights[s] * C_D[w, d, s] * b[w, m, d, s]
                     for w in W 
                     for m in M 
-                    for d in D)
+                    for d in D
+                    for s in S)
                 # Travel cost singleday vessels
-                + gp.quicksum(C_RT[h, b, w] * x[h, b, w, d, s] 
+                + gp.quicksum(self.scenario_weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
                     for h in H_S 
                     for b in B 
                     for w in W 
-                    for d in D)
+                    for d in D
+                    for s in S)
                 # Travel cost multiday vessels
-                + gp.quicksum(C_T[h, i, j] * f[v, i, j, d, s] 
+                + gp.quicksum(self.scenario_weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
                     for h in H_M 
                     for v in V[h] 
                     for i in L for j in L if i != j 
-                    for d in D)
+                    for d in D
+                    for s in S)
                 )
-                for s in S
-            )
-        )
 
         # Second stage constraints
         model.addConstrs(
@@ -500,7 +499,7 @@ class OptimizationModel:
 
         # --- Case identification ---
         case_id = (
-            f"W{len(case.W)}_B{len(case.B)}_V{case.n_vessels_ub_LT_multi + case.n_vessels_ub_ST_multi}"
+            f"W{len(case.W)}_B{len(case.B)}_V{case.max_multiday_vessels}"
             f"_S{len(scenario.scenarios)}_T{len(case.T)}"
         )
 
@@ -548,10 +547,11 @@ class OptimizationModel:
             "n_periods": len(case.T),
             "days_per_period": case.days_per_period,
             "one_base": case.one_base,
-            "n_vessels_ub_ST_multi": case.n_vessels_ub_ST_multi,
-            "n_vessels_ub_ST_single": case.n_vessels_ub_ST_single,
-            "n_vessels_ub_LT_multi": case.n_vessels_ub_LT_multi,
-            "n_vessels_ub_LT_single": case.n_vessels_ub_LT_single,
+            # "n_vessels_ub_ST_multi": case.n_vessels_ub_ST_multi,
+            # "n_vessels_ub_ST_single": case.n_vessels_ub_ST_single,
+            # "n_vessels_ub_LT_multi": case.n_vessels_ub_LT_multi,
+            # "n_vessels_ub_LT_single": case.n_vessels_ub_LT_single,
+            "max_multiday_vessels": case.max_multiday_vessels
 
         }
 

@@ -10,20 +10,15 @@
 # maintenance_categories: optional, list of categories
 
 
-bases: ["1", "3"]
+bases: ["1", "2", "3"]
 
 periods: ["Jan", "Feb", "Mar"]
 
+max_multiday_vessels: 3
 
-n_vessels_ub_LT_multi: 4
-n_vessels_ub_LT_single: 12
-
-n_vessels_ub_ST_multi: 2
-n_vessels_ub_ST_single: 6
+n_days_per_period: 14
 
 one_base: True
-
-days_per_period: 20
 
 wind_farms: ["A", "B"]
 
