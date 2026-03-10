@@ -199,15 +199,17 @@ class OptimizationModel:
         second_obj = (
                 # Downtime costs
                 gp.quicksum(self.scenario_weights[s] * C_D[w, d, s] * b[w, m, d, s]
-                gp.quicksum(self.scenario_weights[s] * C_D[w, d, s] * b[w, m, d, s]
                     for w in W 
                     for m in M 
                     for d in D
                     for s in S)
                 # Travel cost singleday vessels
                 + gp.quicksum(self.scenario_weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
-                    for s in S
-                    for d in D)
+                    for h in H_S
+                    for b in B
+                    for w in W
+                    for d in D
+                    for s in S)
                 # Travel cost singleday vessels(
                 + gp.quicksum(self.scenario_weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
                     for h in H_S 
@@ -215,10 +217,7 @@ class OptimizationModel:
                     for w in W 
                     for d in D
                     for s in S)
-                    for s in S
-                    for d in D)
                 # Travel cost multiday vessels
-                + gp.quicksum(self.scenario_weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
                 + gp.quicksum(self.scenario_weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
                     for h in H_M 
                     for v in V[h] 
@@ -226,9 +225,7 @@ class OptimizationModel:
                     for d in D
                     for s in S)
                 )
-                    for s in S
-                    for d in D)
-                )
+
 
         # Second stage constraints
         model.addConstrs(
