@@ -1,6 +1,6 @@
 import numpy as np
 
-from scenario_models import PriceModel, WeatherModel
+from scenario_models import price_model, weather_model 
 from .patterns import gen_patterns
 from .weather_windows import find_weather_windows
 from .scenario_reduction import perform_scenario_reduction
@@ -12,9 +12,6 @@ class ScenarioConfig:
         self.scenarios = scenarios
         self.scenario_reduction = scenario_reduction
         
-        price_model = PriceModel()
-        weather_model = WeatherModel()
-        
         # {(s, iso, wl_id): (n_hours, 2) np.array
         weather = self._make_weather(weather_model) 
             
@@ -23,7 +20,7 @@ class ScenarioConfig:
         
         # {(w, m, d, s): int}
         failures = self._make_failures()
-
+        
         # {(w, d, s): float}} 
         downtime_costs = self._make_downtime_costs(weather, prices)
         
@@ -54,25 +51,32 @@ class ScenarioConfig:
             
     
     def get_KS_for_scenarios(self, scenario_list):
+        K_S = {}
         for (h, b, w, d, s), value in self.K_S.items():
             if s in scenario_list:
-                yield (h, b, w, d, s), value        
+                K_S[(h, b, w, d, s)] = value        
+        return K_S
 
     def get_KM_for_scenarios(self, scenario_list):
+        K_M = {}
         for (h, w, d, s), value in self.K_M.items():
             if s in scenario_list:
-                yield (h, w, d, s), value
+                K_M[(h, w, d, s)] = value
+        return K_M
                 
     def get_CD_for_scenarios(self, scenario_list):
+        C_D = {}
         for (w, d, s), value in self.C_D.items():
             if s in scenario_list:
-                yield (w, d, s), value
+                C_D[(w, d, s)] = value
+        return C_D
 
     def get_F_for_scenarios(self, scenario_list):
+        F = {}
         for (w, m, d, s), value in self.F.items():
             if s in scenario_list:
-                yield (w, m, d, s), value
-
+                F[(w, m, d, s)] = value
+        return F
 
     def _make_weather(self, weather_model):
         weather = {}

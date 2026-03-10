@@ -113,3 +113,4 @@ class PriceModel:
         
         return y_sim
 
+price_model = PriceModel()

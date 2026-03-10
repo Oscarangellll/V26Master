@@ -23,6 +23,8 @@ class CaseConfig:
         else:
             self.vessel_types = data.vessel_types
         
+        self.max_multiday_vessels = case["max_multiday_vessels"]
+
         self.bases = [b for b in data.bases if b.name in case["bases"]]
 
         self.periods = case.get("periods",
@@ -30,13 +32,6 @@ class CaseConfig:
             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         )
         
-        # self.n_vessels_ub_ST_multi = case["n_vessels_ub_ST_multi"]
-        # self.n_vessels_ub_ST_single = case["n_vessels_ub_ST_single"]
-        
-        # self.n_vessels_ub_LT_multi = case["n_vessels_ub_LT_multi"]
-        # self.n_vessels_ub_LT_single = case["n_vessels_ub_LT_single"]
-        self.max_multiday_vessels = case["max_multiday_vessels"]
-
         self.one_base = case["one_base"]
         
         self.days_per_period = case.get("days_per_period", 30)
@@ -48,7 +43,7 @@ class CaseConfig:
             if w.name in wind_farm_names 
         ]
         self.coalition = "".join(wf.name for wf in self.wind_farms)
-
+        
         self.all_wl_ids_for_iso = {
             iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
             for iso in list({w.iso for w in self.wind_farms})
@@ -67,13 +62,17 @@ class CaseConfig:
         self.power_curve = data.power_curve
         
         self.upper_bound_weather_window = data.upper_bound_weather_window
+        
+        self.travel_threshold_hours = data.travel_threshold_hours
 
+        self.work_day_start = data.work_day_start
+        self.work_day_end = data.work_day_end
         
     # First stage sets
     @property
     def H(self):
         return [h.name for h in self.vessel_types]
-
+    
     @property
     def H_S(self):
         return [h.name for h in self.vessel_types if not h.multiday]
@@ -206,7 +205,7 @@ class CaseConfig:
                                 unit=Unit.KILOMETERS
                             ) 
                             traveltime = distance / h.travel_speed
-                            travel_threshold = data.travel_threshold_hours
+                            travel_threshold = self.travel_threshold_hours
                             U[h.name, i.name, j.name] = (traveltime + travel_threshold - 1) // 24 + 1
         return U
 
