@@ -490,6 +490,7 @@ class ConsensusModel:
         master.build_model()
         master.model.setParam("MIPGap", float(mip_gap_master))
         master.model.setParam("Threads", 0)  # use all cores
+        master.model.setParam("TimeLimit", 14400) #max 4 timer master solve
 
         # Apply persistent state directly on master
         bm = BoundManager(master)
@@ -518,7 +519,7 @@ class ConsensusModel:
         aggregator: str = "mean",  # consider "median" if objectives noisy
         tighten_ub_st: bool = True,
         unanim_fix_zero_st: bool = True,
-        mip_gap_master: float = 0.002,
+        mip_gap_master: float = 0.01,
     ):
         fix = FixState()
 

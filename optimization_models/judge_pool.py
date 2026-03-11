@@ -27,6 +27,7 @@ def _init_worker(
     m.build_model()
 
     m.model.setParam("MIPGap", float(mip_gap))
+    m.model.setParam("TimeLimit", 3600) #1 hr per judge solve max
     m.model.setParam("Threads", 1)  # CRITICAL: one core per judge
 
     _WORKER["m"] = m

@@ -87,8 +87,7 @@ if __name__ == "__main__":
 
                 model.optimize()
 
-                runtime = model.model.Runtime
-                if runtime > 14_400:
+                if model.model.MIPGap > 0.05:
                     exit_loop = True
 
             elif args.method == "con":
@@ -99,7 +98,7 @@ if __name__ == "__main__":
                     case,
                     scenario,
                     judge_seeds_1scenario_each=judge_seeds,
-                    mip_gap_judges = 0.01,
+                    mip_gap_judges = 0.02,
                 )
                 
                 model, runtime = cm.optimize(master_scenarios)
@@ -137,7 +136,7 @@ if __name__ == "__main__":
         ])
 
     # The true distribution is the same for all solutions
-    true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=100, replace=False)
+    true_distribution = master_rng.choice(np.arange(1_001, 10_000), size=300, replace=False)
     scenario = ScenarioConfig(case, true_distribution)
     def evaluate_solution(solution):
         obj = 0

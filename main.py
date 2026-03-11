@@ -105,7 +105,7 @@ if __name__ == '__main__':
                         
                 model.build_model()
                 
-                model.model.setParam("OutputFlag", 1)
+                model.model.setParam("OutputFlag", 0)
                 model.model.setParam("MIPGap", 0.02) # 1% optimality gap
                 model.model.setParam("TimeLimit", 14400) # 4 hours time limit per instance
                 # model.model.setParam("Threads", 1)  # use single thread 
@@ -122,7 +122,7 @@ if __name__ == '__main__':
                     case,
                     scenario,
                     judge_seeds_1scenario_each=judge_seeds,
-                    mip_gap_judges=0.01,
+                    mip_gap_judges=0.02,
                     log=False,
                 )
 
@@ -137,7 +137,7 @@ if __name__ == '__main__':
                     aggregator="mean",
                     tighten_ub_st=True,
                     unanim_fix_zero_st=True,
-                    mip_gap_master=0.01,
+                    mip_gap_master=0.02,
                 )
                 
                 model.report_to_csv(resultspath, instance=instance, runtime=runtime, write_header=first_row)

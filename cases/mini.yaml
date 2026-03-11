@@ -13,8 +13,6 @@ bases: ["1", "2", "3"]
 
 periods: ["Jan", "Feb", "Mar"]
 
-max_multiday_vessels: 3
-
 n_days_per_period: 14
 
 one_base: True

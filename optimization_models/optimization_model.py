@@ -210,13 +210,6 @@ class OptimizationModel:
                     for w in W
                     for d in D
                     for s in S)
-                # Travel cost singleday vessels(
-                + gp.quicksum(self.scenario_weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
-                    for h in H_S 
-                    for b in B 
-                    for w in W 
-                    for d in D
-                    for s in S)
                 # Travel cost multiday vessels
                 + gp.quicksum(self.scenario_weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
                     for h in H_M 
@@ -424,6 +417,7 @@ class OptimizationModel:
         ) 
         
         model.setObjective(first_obj + second_obj)
+        model.update()
         
             
         self.model = model

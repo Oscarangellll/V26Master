@@ -7,7 +7,7 @@
 # wind_farms: required, list of wind farms
 # maintenance_categories: optional, list of categories
 
-max_multiday_vessels: 6
+max_multiday_vessels: 4
 
 bases: ["1", "2", "3"]
 
