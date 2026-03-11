@@ -114,6 +114,14 @@ if __name__ == "__main__":
                 for key, var in getattr(model, var_group).items()
             )
             
+            gamma_LT_str = ";".join(f"{key}:{val}"
+                for (var_group, key), val in solution
+                if var_group == "gamma_LT" and val > 0)
+
+            gamma_ST_str = ";".join(f"{key}:{val}"
+                for (var_group, key), val in solution
+                if var_group == "gamma_ST" and val > 0)
+            
             cache[scenario_tree_size][solution] += 1
         
             with results_path.open("a", newline="") as f:
@@ -122,7 +130,9 @@ if __name__ == "__main__":
                     scenario_tree_size, 
                     model.model.ObjVal, 
                     runtime,
-                    model.model.MIPGap
+                    model.model.MIPGap,
+                    gamma_LT_str,
+                    gamma_ST_str
                 ])
         if exit_loop:
             break
