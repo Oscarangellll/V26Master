@@ -87,6 +87,7 @@ if __name__ == "__main__":
 
                 model.optimize()
 
+                runtime = model.model.Runtime
                 if model.model.MIPGap > 0.05:
                     exit_loop = True
 
