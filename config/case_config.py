@@ -36,6 +36,8 @@ class CaseConfig:
         
         self.days_per_period = case.get("days_per_period", 30)
         
+        self.work_friction = case.get("work_friction", 0)
+        
         wind_farm_names = wind_farm_names if wind_farm_names is not None else case["wind_farms"]
         self.wind_farms = [
             w

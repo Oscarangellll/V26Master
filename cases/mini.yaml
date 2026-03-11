@@ -19,3 +19,4 @@ one_base: True
 
 wind_farms: ["A", "B"]
 
+work_friction: 0.1

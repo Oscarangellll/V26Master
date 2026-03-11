@@ -11,7 +11,6 @@ def _find_daily_window(wind_speed, wave_height, vessel_type):
     # Vessel limits
     max_speed = vessel_type.max_wind
     max_height = vessel_type.max_wave
-    shift_limit = vessel_type.shift_length
 
     current_window = 0
     max_window = 0
@@ -25,7 +24,6 @@ def _find_daily_window(wind_speed, wave_height, vessel_type):
         else:
             current_window = 0
 
-    max_window = min(max_window, shift_limit)
     return max_window
 
 def find_weather_windows(case, weather, scenarios):

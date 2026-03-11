@@ -11,6 +11,7 @@ Returns medoid scenario indices and their weights.
 """
 
 import numpy as np
+import kmedoids
 from sklearn.preprocessing import StandardScaler
 
 
@@ -19,9 +20,11 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
     Build a single feature vector for one scenario.
     
     Features per period (month):
-        - weather windows per vessel type per park: mean, std, q10  (|H| × |W| × |T| × 3)
-        - downtime cost per park: mean, std                         (|W| × |T| × 2)
-        - failures per park per maintenance type: mean              (|W| × |M| × |T|)
+        - weather windows per vessel type per park: mean, std, q10  (|H| × |W| × |T| × 3) 2* 5 * 12 * 3 = 360
+        - downtime cost per park: mean, std                         (|W| × |T| × 2) 5 * 12 * 2 = 120
+        - failures per park per maintenance type: mean              (|W| × |M| × |T|) 5 * 5 * 12 = 300
+        
+        360 + 120 + 300 = 780 features total 780 / 12 months = 65 features per month (for interpretability)
     
     Returns: 1D array of concatenated features
     """
@@ -30,18 +33,35 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
     # Use case.D_t to get {period_name: [days_in_period]}
     periods = case.D_t
     
-    # 1. Weather windows: mean, std, q10 per period per (vessel_type, park)
+    # # 1. Weather windows: mean, std, q10 per period per (vessel_type, park)
+    # for h in case.vessel_types:
+    #     for w in case.wind_farms:
+    #         for period_name, days_in_period in periods.items():
+    #             windows_this_period = [
+    #                 weather_windows.get((h.name, w.name, d, scenario_id), 0)
+    #                 for d in days_in_period
+    #             ]
+    #             features.append(np.mean(windows_this_period))
+    #             features.append(np.std(windows_this_period))
+    #             features.append(np.quantile(windows_this_period, 0.1))
+    
+    # 1. Weather windows: amount of short, medium, long windows per period per (vessel_type, park)
     for h in case.vessel_types:
         for w in case.wind_farms:
             for period_name, days_in_period in periods.items():
-                windows_this_period = [
-                    weather_windows.get((h.name, w.name, d, scenario_id), 0)
-                    for d in days_in_period
-                ]
-                features.append(np.mean(windows_this_period))
-                features.append(np.std(windows_this_period))
-                features.append(np.quantile(windows_this_period, 0.1))
-    
+                short_windows, medium_windows, long_windows = 0, 0, 0
+                for d in days_in_period:
+                    hours = weather_windows.get((h.name, w.name, d, scenario_id), 0)
+                    if hours < 4:
+                        short_windows += 1
+                    elif hours < 8:
+                        medium_windows += 1
+                    else:
+                        long_windows += 1
+                features.append(short_windows)
+                features.append(medium_windows)
+                features.append(long_windows)
+
     # 2. Downtime costs: mean, std per period per park
     for w in case.wind_farms:
         for period_name, days_in_period in periods.items():
@@ -60,7 +80,8 @@ def build_feature_vector(case, scenario_id, weather_windows, downtime_costs, fai
                     failures.get((w.name, m.name, d, scenario_id), 0)
                     for d in days_in_period
                 ]
-                features.append(np.mean(failures_this_period))
+                # features.append(np.mean(failures_this_period)) #mean
+                features.append(np.sum(failures_this_period)) #sum
     
     return np.array(features)
 
@@ -117,12 +138,17 @@ def perform_scenario_reduction(
     
     # K-medoids clustering using pure NumPy/SciPy
     print(f"Running k-medoids with k={n_reduced_scenarios}...")
-    medoid_indices = _kmedoids(X_scaled, n_clusters=n_reduced_scenarios, random_state=42)
-    labels = _assign_clusters(X_scaled, medoid_indices)
+    # medoid_indices = _kmedoids(X_scaled, n_clusters=n_reduced_scenarios, random_state=42)
+    from scipy.spatial.distance import pdist, squareform 
+    diss = squareform(pdist(X_scaled, metric='euclidean')) 
+    result = kmedoids.fasterpam(diss, medoids=n_reduced_scenarios)
     
+    # Result object from kmedoids
+    medoid_indices = np.asarray(result.medoids, dtype=int)
+    labels = np.asarray(result.labels, dtype=int) 
+
     medoid_ids = [scenario_ids[idx] for idx in medoid_indices]
     
-    # Compute weights: fraction of scenarios in each cluster
     unique_labels, counts = np.unique(labels, return_counts=True)
     weights = {}
     for label in range(n_reduced_scenarios):
@@ -140,103 +166,3 @@ def perform_scenario_reduction(
     print(f"  Weights: {weights}")
     
     return medoid_ids, weights, X_scaled
-
-
-def _kmedoids(X, n_clusters, max_iter=100, random_state=42):
-    """
-    Simple k-medoids clustering using pure NumPy/SciPy.
-    
-    Parameters
-    ----------
-    X : ndarray of shape (n_samples, n_features)
-        Standardized feature matrix
-    n_clusters : int
-        Number of clusters
-    max_iter : int
-        Maximum iterations
-    random_state : int
-        Random seed
-    
-    Returns
-    -------
-    medoid_indices : ndarray of shape (n_clusters,)
-        Indices of medoid points in X
-    """
-    n_samples = X.shape[0]
-    rng = np.random.RandomState(random_state)
-    
-    # Initialize: k-medoids++ init (choose first medoid as furthest from center)
-    center = X.mean(axis=0)
-    distances_to_center = np.linalg.norm(X - center, axis=1)
-    medoid_indices = np.array([np.argmax(distances_to_center)])
-    
-    # Greedily add remaining medoids (furthest from existing ones)
-    while len(medoid_indices) < n_clusters:
-        distances = np.zeros(n_samples)
-        for i in range(n_samples):
-            distances[i] = np.min([np.linalg.norm(X[i] - X[m]) for m in medoid_indices])
-        # Probabilistically choose next medoid weighted by distance
-        probs = distances / distances.sum()
-        next_medoid = rng.choice(n_samples, p=probs)
-        medoid_indices = np.append(medoid_indices, next_medoid)
-    
-    medoid_indices = np.unique(medoid_indices)  # Remove duplicates
-    
-    # Iterate: assign points and recompute medoids
-    for iteration in range(max_iter):
-        # Assign each point to nearest medoid
-        labels = _assign_clusters(X, medoid_indices)
-        
-        # Recompute medoids: for each cluster, choose point with min sum-of-distances
-        new_medoid_indices = []
-        for k in range(n_clusters):
-            mask = (labels == k)
-            if not np.any(mask):
-                # Empty cluster: keep old medoid
-                new_medoid_indices.append(medoid_indices[k])
-                continue
-            
-            cluster_points = X[mask]
-            # Sum of distances from each point to all others in cluster
-            distances = np.zeros(np.sum(mask))
-            for i, idx in enumerate(np.where(mask)[0]):
-                distances[i] = np.sum(np.linalg.norm(cluster_points - X[idx], axis=1))
-            
-            # Medoid is point with minimum sum-of-distances
-            local_medoid_idx = np.argmin(distances)
-            global_medoid_idx = np.where(mask)[0][local_medoid_idx]
-            new_medoid_indices.append(global_medoid_idx)
-        
-        new_medoid_indices = np.array(new_medoid_indices)
-        
-        # Check convergence
-        if np.array_equal(medoid_indices, new_medoid_indices):
-            break
-        
-        medoid_indices = new_medoid_indices
-    
-    return medoid_indices
-
-
-def _assign_clusters(X, medoid_indices):
-    """
-    Assign each point to nearest medoid.
-    
-    Parameters
-    ----------
-    X : ndarray of shape (n_samples, n_features)
-        Feature matrix
-    medoid_indices : ndarray
-        Indices of medoids
-    
-    Returns
-    -------
-    labels : ndarray of shape (n_samples,)
-        Cluster assignment for each point
-    """
-    n_samples = X.shape[0]
-    labels = np.zeros(n_samples, dtype=int)
-    for i in range(n_samples):
-        distances = np.array([np.linalg.norm(X[i] - X[m]) for m in medoid_indices])
-        labels[i] = np.argmin(distances)
-    return labels

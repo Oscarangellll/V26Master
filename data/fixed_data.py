@@ -16,7 +16,6 @@ class VesselType:
     max_wind: float
     max_wave: float
     cost_per_km: float
-    shift_length: int = 12
     periodic_return: int | None = None
 
     def cost_ST(self, days):
@@ -76,7 +75,6 @@ class FixedData:
             max_wind=25,
             max_wave=1.5,
             cost_per_km=8,
-            shift_length=10,
         ),
         VesselType("SOV", 
             required_capacity=1,
@@ -88,7 +86,6 @@ class FixedData:
             max_wind=30,
             max_wave=2,
             cost_per_km=10,
-            shift_length=12,
             periodic_return=14,
         )
     ]

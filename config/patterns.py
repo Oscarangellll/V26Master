@@ -73,12 +73,12 @@ def remove_inf_patterns(K, L, weather_windows, case, scenarios):
                 for s in scenarios:
                     if h.multiday:
                         for k in K[h.name]:
-                            if L[k] <= weather_windows[(h.name, w.name, d, s)]:
+                            if (1 + case.work_friction) * L[k] <= weather_windows[(h.name, w.name, d, s)]:
                                 KM_hwds[h.name, w.name, d, s].append(k)
                     else:
                         for b in case.bases:
                             for k in K[h.name]:
-                                if L[k] + L_RT[h.name, b.name, w.name] <= weather_windows[(h.name, w.name, d, s)]:
+                                if (1 + case.work_friction) * (L[k] + L_RT[h.name, b.name, w.name]) <= weather_windows[(h.name, w.name, d, s)]:
                                     KS_hbwds[h.name, b.name, w.name, d, s].append(k)
     return KS_hbwds, KM_hwds
 
