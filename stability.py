@@ -118,20 +118,21 @@ with results_path.open("w", newline="") as f:
 
 # The true distribution is the same for all solutions
 true_distribution = np.arange(51, 301)
-scenario = ScenarioConfig(case, true_distribution)
-
-model = OptimizationModel(case, scenario)
-
-def evaluate_solution(solution):
-    for (group, key), val in solution:
-        var = getattr(model, group)[key]
-        var.LB = val
-        var.UB = val
+def evaluate_solution(solution): 
+    obj = 0
+    for scenario in true_distribution:
+        scenario_cfg = ScenarioConfig(case, scenario)
+        model = OptimizationModel(case, scenario_cfg)
         
-    model.optimize()
+        for (group, key), val in solution:
+            var = getattr(model, group)[key]
+            var.LB = val
+            var.UB = val
 
-    return model.ObjVal 
+        model.optimize()
+        obj += model.ObjVal
 
+    return obj / len(true_distribution)
 
 evaluated_solutions = {}
 for tree_size, counter in cache.items():
