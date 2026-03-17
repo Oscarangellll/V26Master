@@ -1,51 +1,34 @@
-import os
-import pickle
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 from data.fixed_data import data
 
 class WeatherModel:
-    def __init__(self, resolution_speed=0.8, resolution_height=0.4):
-        self.rs = resolution_speed 
+    def __init__(self, resolution_speed=1, resolution_height=0.9):
+        self.rs = resolution_speed
         self.rh = resolution_height
-        
+
         self._models = {}
 
-        model_hash = data.weather_model_hash(self.rs, self.rh)
-        model_path = f"scenario_models/{model_hash}.pkl"
-
-        if os.path.exists(model_path):
-            print("Reading weather model from file")
-            with open(model_path, "rb") as f:
-                self._models = pickle.load(f)
-        else:
-            print("Fitting weather model")
-            self._fit()
-            with open(model_path, "wb") as f:
-                pickle.dump(self._models, f)
-        
+        self._fit()
 
     def _fit(self):
-
-        data_hash = data.weather_data_hash()
-        data_path = f"data/weather/{data_hash}.csv"
         
         df_weather = pd.read_csv(
-            data_path,
+            "data/weather/weather.csv",
             index_col="time",
-            parse_dates=True
+            parse_dates=True,
         )
-
+            
         for wl_id, df_wl in df_weather.groupby("weather_location_id"):
             y = df_wl[["speed", "height"]].to_numpy(copy=True)
             T, K = y.shape
 
             month_of_obs = df_wl.index.month.to_numpy() - 1
-                        
+
             monthly_mean = np.zeros((12, K))
-            monthly_std  = np.zeros((12, K))
+            monthly_std = np.zeros((12, K))
             for m in range(12):
                 idx = month_of_obs == m
 
@@ -55,15 +38,15 @@ class WeatherModel:
                 y[idx] = (y[idx] - monthly_mean[m]) / monthly_std[m]
 
             bin_width = np.array([self.rs, self.rh]) / monthly_std.mean(axis=0)
-            
+
             bins = []
             for k in range(K):
                 bins.append(np.arange(y[:, k].min(), y[:, k].max() + bin_width[k], bin_width[k]))
-            
+
             idx = np.empty((T, K), dtype=int)
             for k in range(K):
                 idx[:, k] = np.digitize(y[:, k], bins[k]) - 1
-            
+
             states = np.zeros(T, dtype=int)
             multiplier = 1
             for k in reversed(range(K)):
@@ -72,7 +55,7 @@ class WeatherModel:
 
             init_states, counts = np.unique(states, return_counts=True)
             init_probs = counts / counts.sum()
-            
+
             N = multiplier
             P = np.zeros((N, N))
             np.add.at(P, (states[:-1], states[1:]), 1)
@@ -91,14 +74,11 @@ class WeatherModel:
                 "P": P,
             }
 
-    def simulate(self, wl_id, rng, months=None, days_per_month=None, month_of_obs=None):
+    def simulate(self, wl_id, rng):
         model = self._models[wl_id]
 
-        if months is not None and days_per_month is not None:
-            months = (pd.to_datetime(months, format="%b").month).to_numpy() - 1
-            month_of_sim = np.repeat(months, 24 * days_per_month)
-        elif month_of_obs is not None:
-            month_of_sim = month_of_obs
+        months = (pd.to_datetime(data.periods, format="%b").month).to_numpy() - 1
+        month_of_sim = np.repeat(months, 24 * data.days_per_period)
 
         T, K = len(month_of_sim), 2
 
@@ -132,8 +112,16 @@ class WeatherModel:
 
             y_sim[idx] = y_sim[idx] * model["monthly_std"][m] + model["monthly_mean"][m]
         
-        #y_sim = np.maximum(y_sim, 0)
+        y_sim = np.maximum(y_sim, 0)
+       
+        df = pd.DataFrame({
+            "d": np.arange(T) // 24 + 1,
+            "hour": np.arange(T) % 24,
+            "speed": y_sim[:, 0],
+            "height": y_sim[:, 1],
+            "wl_id": wl_id
+        })
 
-        return y_sim
+        return df 
+        
 
-weather_model = WeatherModel()

@@ -6,75 +6,44 @@ import yaml
 from data.fixed_data import data
 
 class CaseConfig:
-    def __init__(self, case_path, wind_farm_names=None):
+    def __init__(self, case_path):
         case_path = Path(case_path)
-
-        self.name = case_path.stem
 
         with case_path.open() as f:
             case = yaml.safe_load(f)
-        
+
         if "vessel_types" in case:
             self.vessel_types = [
-                h 
-                for h in data.vessel_types 
+                h
+                for h in data.vessel_types
                 if h.name in case["vessel_types"]
             ]
         else:
             self.vessel_types = data.vessel_types
-        
+
         self.max_multiday_vessels = case["max_multiday_vessels"]
 
         self.bases = [b for b in data.bases if b.name in case["bases"]]
 
-        self.periods = case.get("periods",
-            ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        )
+        self.periods = data.periods
+
+        self.days_per_period = data.days_per_period
         
         self.one_base = case["one_base"]
-        
-        self.days_per_period = case.get("days_per_period", 30)
-        
-        self.work_friction = case.get("work_friction", 0)
-        
-        wind_farm_names = wind_farm_names if wind_farm_names is not None else case["wind_farms"]
+
         self.wind_farms = [
             w
             for w in data.wind_farms
-            if w.name in wind_farm_names 
+            if w.name in case["wind_farms"]
         ]
-        self.coalition = "".join(wf.name for wf in self.wind_farms)
-        
-        self.all_wl_ids_for_iso = {
-            iso: list({w.weather_location_id for w in data.wind_farms if w.iso == iso})
-            for iso in list({w.iso for w in self.wind_farms})
-        }
 
-        if "maintenance_categories" in case:
-            self.maintenance_categories = [
-                m 
-                for m in data.maintenance_categories 
-                if m.name in case["maintenance_categories"]
-            ]
-        else:
-            self.maintenance_categories = data.maintenance_categories
+        self.maintenance_categories = data.maintenance_categories
 
-        ### Case data from FixedData
-        self.power_curve = data.power_curve
-        
-        self.upper_bound_weather_window = data.upper_bound_weather_window
-        
-        self.travel_threshold_hours = data.travel_threshold_hours
-
-        self.work_day_start = data.work_day_start
-        self.work_day_end = data.work_day_end
-        
     # First stage sets
     @property
     def H(self):
         return [h.name for h in self.vessel_types]
-    
+
     @property
     def H_S(self):
         return [h.name for h in self.vessel_types if not h.multiday]
@@ -82,7 +51,7 @@ class CaseConfig:
     @property
     def H_M(self):
         return [h.name for h in self.vessel_types if h.multiday]
-    
+
     @property
     def V(self):
         return {
@@ -97,6 +66,7 @@ class CaseConfig:
     @property
     def T(self):
         return self.periods
+
 
     # First stage parameters
     @property
@@ -113,7 +83,7 @@ class CaseConfig:
             h.name: h.cost_LT(self.days_per_period, len(self.T))
             for h in self.vessel_types
         }
-        
+
     @property
     def C_B(self):
         return {b.name: b.cost for b in self.bases}
@@ -127,7 +97,7 @@ class CaseConfig:
         return {h.name: h.required_capacity for h in self.vessel_types}
 
     # Second stage sets
-    @property 
+    @property
     def W(self):
         return [w.name for w in self.wind_farms]
 
@@ -158,31 +128,32 @@ class CaseConfig:
     @property
     def N(self):
         return {h.name: h.n_teams for h in self.vessel_types}
-    
+
     @property
     def C_RT(self):
         C_RT = {}
 
         for h in self.vessel_types:
-            for b in self.bases:
-                for w in self.wind_farms:
-                    distance = 2 * haversine((b.lat, b.lon), (w.lat, w.lon), unit=Unit.KILOMETERS)
-                    C_RT[h.name, b.name, w.name] = distance * h.cost_per_km
+            if not h.multiday:
+                for b in self.bases:
+                    for w in self.wind_farms:
+                        distance = 2 * haversine((b.lat, b.lon), (w.lat, w.lon), unit=Unit.KILOMETERS)
+                        C_RT[h.name, b.name, w.name] = distance * h.cost_per_km
 
         return C_RT
 
     @property
     def C_T(self):
         C_T = {}
-        
+
         for h in self.vessel_types:
             if h.multiday:
                 for i in self.bases + self.wind_farms:
                     for j in self.bases + self.wind_farms:
                         if i != j:
                             distance = haversine(
-                                (i.lat, i.lon), 
-                                (j.lat, j.lon), 
+                                (i.lat, i.lon),
+                                (j.lat, j.lon),
                                 unit=Unit.KILOMETERS
                             )
                             C_T[h.name, i.name, j.name] = distance * h.cost_per_km
@@ -202,42 +173,11 @@ class CaseConfig:
                     for j in self.bases + self.wind_farms:
                         if i != j:
                             distance = haversine(
-                                (i.lat, i.lon), 
-                                (j.lat, j.lon), 
+                                (i.lat, i.lon),
+                                (j.lat, j.lon),
                                 unit=Unit.KILOMETERS
-                            ) 
+                            )
                             traveltime = distance / h.travel_speed
-                            travel_threshold = self.travel_threshold_hours
+                            travel_threshold = data.travel_threshold_hours
                             U[h.name, i.name, j.name] = (traveltime + travel_threshold - 1) // 24 + 1
         return U
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

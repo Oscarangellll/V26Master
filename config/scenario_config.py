@@ -1,165 +1,56 @@
-import numpy as np
 
-from scenario_models import price_model, weather_model 
-from .patterns import gen_patterns
-from .weather_windows import find_weather_windows
-from .scenario_reduction import perform_scenario_reduction
+
+import pandas as pd
+
 
 class ScenarioConfig:
-    def __init__(self, case, scenarios: list[int], scenario_reduction: bool = False):
-
-        self.case = case        
-        self.scenarios = scenarios
-        self.scenario_reduction = scenario_reduction
+    def __init__(self, case, scenario_ids):
         
-        # {(s, iso, wl_id): (n_hours, 2) np.array
-        weather = self._make_weather(weather_model) 
-            
-        # {(s, iso): (n_days, n_locations) np.array
-        prices = self._make_prices(weather, price_model) 
+        # Second stage sets
+        self.S = scenario_ids
         
-        # {(w, m, d, s): int}
-        failures = self._make_failures()
-        
-        # {(w, d, s): float}} 
-        downtime_costs = self._make_downtime_costs(weather, prices)
-        
-        # {(h, w, d, s): int}
-        weather_windows = find_weather_windows(self.case, weather, scenarios)
-        
-        if scenario_reduction:
-            medoid_ids, weights, X_scaled = perform_scenario_reduction(
-                case=self.case,
-                scenario_ids=self.scenarios,
-                weather_windows=weather_windows,
-                downtime_costs=downtime_costs,
-                failures=failures,
-                n_reduced_scenarios=6
-            )
-            weather_windows_reduced = {k: v for k, v in weather_windows.items() if k[3] in medoid_ids}
-            self.C_D = {k: v for k, v in downtime_costs.items() if k[2] in medoid_ids}
-            self.F = {k: v for k, v in failures.items() if k[3] in medoid_ids}
-        
-            self.K_S, self.K_M, self.P = gen_patterns(weather_windows_reduced, self.case, medoid_ids)
-            self.S = medoid_ids
-            self.scenario_weights = {s: weights[s] for s in medoid_ids}
-        else:
-            self.K_S, self.K_M, self.P = gen_patterns(weather_windows, self.case, self.scenarios)
-            self.C_D = downtime_costs
-            self.F = failures
-            self.S = scenarios
-            
-    
-    def get_KS_for_scenarios(self, scenario_list):
-        K_S = {}
-        for (h, b, w, d, s), value in self.K_S.items():
-            if s in scenario_list:
-                K_S[(h, b, w, d, s)] = value        
-        return K_S
+        # Second stage parameters
+        df_F = pd.read_parquet(
+            "data/scenario_data/failures.parquet", 
+            filters=[("s", "in", scenario_ids)]
+        )
+        self.F = {(r.w, r.m, r.d, r.s): r.failures for r in df_F.itertuples()}
+       
+        C_D_df = pd.read_parquet(
+            "data/scenario_data/downtime_cost.parquet", 
+            filters=[("s", "in", scenario_ids)]
+        )
+        self.C_D = {(r.w, r.d, r.s): r.downtime_cost for r in C_D_df.itertuples()}
 
-    def get_KM_for_scenarios(self, scenario_list):
-        K_M = {}
-        for (h, w, d, s), value in self.K_M.items():
-            if s in scenario_list:
-                K_M[(h, w, d, s)] = value
-        return K_M
-                
-    def get_CD_for_scenarios(self, scenario_list):
-        C_D = {}
-        for (w, d, s), value in self.C_D.items():
-            if s in scenario_list:
-                C_D[(w, d, s)] = value
-        return C_D
 
-    def get_F_for_scenarios(self, scenario_list):
-        F = {}
-        for (w, m, d, s), value in self.F.items():
-            if s in scenario_list:
-                F[(w, m, d, s)] = value
-        return F
+        self.P = {
+            ("Annual Service", 1): 1,
+            ("Manual Reset", 1): 1, 
+            ("Minor Repair", 1): 0,
+            ("Medium Repair", 1): 1,
+            ("Severe Repair", 1): 0,
 
-    def _make_weather(self, weather_model):
-        weather = {}
+            ("Annual Service", 2): 1,
+            ("Manual Reset", 2): 1,
+            ("Minor Repair", 2): 1,
+            ("Medium Repair", 2): 1,
+            ("Severe Repair", 2): 1
+        }
 
-        for s in self.scenarios:
-            rng = np.random.default_rng(seed=s)
+        self.K_S = {
+            (h, b, w, d, s): [1] 
+            for h in case.H 
+            for b in case.B 
+            for w in case.W 
+            for d in case.D 
+            for s in self.S
+        }
 
-            for iso in self.case.all_wl_ids_for_iso.keys():
-                for loc in self.case.all_wl_ids_for_iso[iso]:
-                    weather[(s, iso, loc)] = weather_model.simulate(
-                        loc, 
-                        rng, 
-                        self.case.periods, 
-                        self.case.days_per_period
-                    )
-
-        return weather
-               
-    def _make_prices(self, weather, price_model):
-        prices = {}
-
-        for s in self.scenarios:
-            rng = np.random.default_rng(seed=s)
-
-            for iso in self.case.all_wl_ids_for_iso.keys():
-            
-                # Hourly wind speed per location
-                #.T to get shape (n_hours, n_locations) instead of (n_locations, n_hours)
-                # Shape (n_hours, n_locations)
-                iso3_wind_speeds = np.array(
-                    [weather[s, iso, wl_id][:,0] for wl_id in sorted(self.case.all_wl_ids_for_iso[iso])]
-                ).T 
-        
-                # Average wind speed per day per location
-                # Shape (n_days, n_locations)
-                iso3_wind_speeds = iso3_wind_speeds.reshape(
-                    -1, 24, iso3_wind_speeds.shape[1]
-                ).mean(axis=1) 
-
-                prices[s, iso] = price_model.simulate(
-                    iso3_wind_speeds, 
-                    iso, 
-                    rng,    
-                    self.case.periods,   
-                    self.case.days_per_period
-                )
-        
-        return prices
-
-    def _make_failures(self):
-        F = {}
-
-        p = [m.failure_rate / 365 for m in self.case.maintenance_categories]
-        p.append(1 - sum(p))
-        
-        for s in self.scenarios:
-            rng = np.random.default_rng(seed=s)
-
-            for w in self.case.wind_farms:
-                draws = rng.multinomial(w.n_turbines, p, size=len(self.case.D))
-                draws = draws[:, :-1]
-
-                for d_idx, d in enumerate(self.case.D):
-                    for m_idx, m in enumerate(self.case.maintenance_categories):
-                        F[w.name, m.name, d, s] = draws[d_idx, m_idx]
-
-        return F
-
-    def _make_downtime_costs(self, weather, prices):
-        C_D = {}
-        for w in self.case.wind_farms:
-            for s in self.scenarios:
-                sim_speed = weather[(s, w.iso, w.weather_location_id)][:, 0]
-            
-                sim_power_output = self.case.power_curve(sim_speed) 
-                
-                n_days = len(sim_power_output) // 24
-                sim_daily_power = sim_power_output.reshape(n_days, 24).mean(axis=1)
-                sim_daily_power *= 24
-                sim_downtime_cost = sim_daily_power * prices[(s, w.iso)]
-
-                for d in self.case.D:
-                    C_D[w.name, d, s] = sim_downtime_cost[d - 1] 
-        
-        return C_D
+        self.K_M = {
+            (h, w, d, s): [1, 2] 
+            for h in case.H 
+            for w in case.W 
+            for d in case.D 
+            for s in self.S
+        }
 
