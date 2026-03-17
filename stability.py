@@ -65,7 +65,7 @@ with results_path.open("w", newline="") as f:
 for st_size in scenario_tree_sizes:
     for j in range(n_trees):
         
-        s = rng.choice(np.arange(1, 101), size=st_size, replace=False)    
+        s = rng.choice(np.arange(1, 51), size=st_size, replace=False)    
         scenario = ScenarioConfig(case, s)
 
         if args.method == "mip":
@@ -117,7 +117,7 @@ with results_path.open("w", newline="") as f:
     ])
 
 # The true distribution is the same for all solutions
-true_distribution = np.arange(101, 301)
+true_distribution = np.arange(51, 301)
 scenario = ScenarioConfig(case, true_distribution)
 
 model = OptimizationModel(case, scenario)

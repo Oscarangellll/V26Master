@@ -38,6 +38,10 @@ class CaseConfig:
         ]
 
         self.maintenance_categories = data.maintenance_categories
+        
+        self.upper_bound_weather_window = 12
+        
+        self.work_friction = 0
 
     # First stage sets
     @property

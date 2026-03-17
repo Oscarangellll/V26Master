@@ -31,7 +31,6 @@ df = df[["w", "d", "s", "downtime_cost"]]
 
 df.to_parquet("data/scenario_data/downtime_cost.parquet")
 df.to_csv("data/scenario_data/downtime_cost.csv", index=False)
-exit()
 
 # Weather window
 # | wl_id | d | s | weather_window |
@@ -73,54 +72,55 @@ def make_weather_windows():
             })
 
     df_ww = pd.DataFrame(rows)
+    df_ww.to_parquet("data/scenario_data/weather_windows.parquet")
     df_ww.to_csv("data/scenario_data/weather_windows.csv", index=False)
 
-# make_weather_windows()
-########
-    df.to_parquet("data/scenario_data/failures.parquet")
-    df.to_csv("data/scenario_data/failures.csv", index=False)
+make_weather_windows()
+# ########
+#     df.to_parquet("data/scenario_data/failures.parquet")
+#     df.to_csv("data/scenario_data/failures.csv", index=False)
 
-#generate_failures()
+# #generate_failures()
 
-def make_weather_windows():
-    df_weather = pd.read_csv("data/scenario_data/weather.csv")
+# def make_weather_windows():
+#     df_weather = pd.read_csv("data/scenario_data/weather.csv")
 
-    working_hours = list(range(data.work_day_start, data.work_day_end))
-    df_working = df_weather[df_weather["hour"].isin(working_hours)]
+#     working_hours = list(range(data.work_day_start, data.work_day_end))
+#     df_working = df_weather[df_weather["hour"].isin(working_hours)]
 
-    rows = []
+#     rows = []
 
-    for h in data.vessel_types:
-        max_speed = h.max_wind
-        max_height = h.max_wave
+#     for h in data.vessel_types:
+#         max_speed = h.max_wind
+#         max_height = h.max_wave
 
-        for (s, wl_id, d), group in df_working.groupby(["s", "wl_id", "d"]):
-            feasible = (
-                (group["speed"] <= max_speed) & 
-                (group["height"] <= max_height)
-            ).to_numpy().astype(int)
+#         for (s, wl_id, d), group in df_working.groupby(["s", "wl_id", "d"]):
+#             feasible = (
+#                 (group["speed"] <= max_speed) & 
+#                 (group["height"] <= max_height)
+#             ).to_numpy().astype(int)
 
-            max_len = 0
-            current_len = 0
-            for val in feasible:
-                if val:
-                    current_len += 1
-                    max_len = max(max_len, current_len)
-                else:
-                    current_len = 0
+#             max_len = 0
+#             current_len = 0
+#             for val in feasible:
+#                 if val:
+#                     current_len += 1
+#                     max_len = max(max_len, current_len)
+#                 else:
+#                     current_len = 0
 
-            rows.append({
-                "h": h.name,
-                "wl_id": wl_id,
-                "d": d,
-                "ww": max_len,
-                "s": s
-            })
+#             rows.append({
+#                 "h": h.name,
+#                 "wl_id": wl_id,
+#                 "d": d,
+#                 "ww": max_len,
+#                 "s": s
+#             })
     
-    df_ww = pd.DataFrame(rows)
-    df_ww.to_csv("data/scenario_data/weather_windows.csv", index=False)
+#     df_ww = pd.DataFrame(rows)
+#     df_ww.to_csv("data/scenario_data/weather_windows.csv", index=False)
 
-# make_weather_windows()
+# # make_weather_windows()
 
 
 
