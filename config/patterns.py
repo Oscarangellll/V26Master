@@ -41,6 +41,17 @@ def gen_patterns(weather_windows, case, scenarios):
     KS_hbwds, KM_hwds = remove_inf_patterns(K, L, weather_windows, case, scenarios)
     KS_hbwds, KM_hwds = remove_dominated_patterns(KS_hbwds, KM_hwds, P, m_names)
     
+    # #print first 10 days patterns
+    # for h in case.vessel_types:
+    #     for w in case.wind_farms:
+    #         for d in range(1, 11):
+    #             for s in scenarios:
+    #                 if h.multiday:
+    #                     print(f"Patterns for {h.name}, {w.name}, day {d}, scenario {s}: {KM_hwds[h.name, w.name, d, s][:10]}")
+    #                 else:
+    #                     for b in case.bases:
+    #                         print(f"Patterns for {h.name}, {b.name}, {w.name}, day {d}, scenario {s}: {KS_hbwds[h.name, b.name, w.name, d, s][:10]}")
+    
     return KS_hbwds, KM_hwds, P
 
 

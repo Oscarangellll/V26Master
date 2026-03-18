@@ -414,11 +414,18 @@ class OptimizationModel:
         self.gamma_LT = gamma_LT
         self.alpha = alpha
         self.eta = eta
+        self.b = b
+        self.S = S
 
         self.charter_cost_ST = charter_cost_ST
         self.charter_cost_LT = charter_cost_LT
         self.base_cost = base_cost
         self.first_obj = first_obj
+        self.travel_cost_S = travel_cost_S
+        self.travel_cost_M = travel_cost_M
+        self.downtime_cost = downtime_cost
+        self.first_obj = first_obj
+        self.second_obj = second_obj
 
 
 

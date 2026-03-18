@@ -5,7 +5,7 @@ import pandas as pd
 from data.fixed_data import data
 
 class WeatherModel:
-    def __init__(self, resolution_speed=1, resolution_height=0.9):
+    def __init__(self, resolution_speed=1, resolution_height=0.1):
         self.rs = resolution_speed
         self.rh = resolution_height
 

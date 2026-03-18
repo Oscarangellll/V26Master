@@ -4,10 +4,10 @@
 # one_base: required
 # wind_farms: required, list of wind farms
 
-max_multiday_vessels: 4
+max_multiday_vessels: 2
 
-bases: ["2"]
+bases: ["3"]
 
 one_base: True
 
-wind_farms: ["A"]
+wind_farms: ["C"]

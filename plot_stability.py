@@ -1,31 +1,72 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import t
 
 # Read the results
 iss = pd.read_csv("results/stability/1W1B/mip/ISS.csv")
 oss = pd.read_csv("results/stability/1W1B/mip/OSS.csv")
 
-# Compute average objective per tree size
-iss_avg = iss.groupby("tree_size")["objective"].mean().reset_index()
-oss_avg = (
-    oss.assign(weighted_obj=lambda df: df["objective"] * df["count"])
-       .groupby("tree_size", as_index=False)
-       .apply(lambda g: g["weighted_obj"].sum() / g["count"].sum())
-       .rename(columns={None: "objective"})
-)
+# Compute ISS statistics per tree size
+iss_stats = []
+for ts, g in iss.groupby("tree_size"):
+    n = len(g)
+    mean = g["objective"].mean()
+    sd = g["objective"].std(ddof=1)
+    cv = sd / mean  # Coefficient of variation
+    se = sd / np.sqrt(n)
+    crit = t.ppf(0.975, n - 1)
+    lo = mean - crit * se
+    hi = mean + crit * se
+    iss_stats.append({"tree_size": ts, "mean": mean, "sd": sd, "cv": cv, "lo": lo, "hi": hi, "n": n})
+iss_ci = pd.DataFrame(iss_stats)
 
-# Create scatter plot
-plt.figure(figsize=(8,5))
-plt.scatter(iss_avg["tree_size"], iss_avg["objective"], label="In-sample", color="blue", alpha=0.6)
-plt.scatter(oss_avg["tree_size"], oss_avg["objective"], label="Out-of-sample", color="red", alpha=0.6)
+# Compute OOS statistics per tree size (weighted by count)
+oss_stats = []
+for ts, g in oss.groupby("tree_size"):
+    n = len(g)
+    weighted_mean = (g["objective"] * g["count"]).sum() / g["count"].sum()
+    
+    # Compute variance of weighted average
+    var_weighted = ((g["objective"] - weighted_mean) ** 2 * g["count"]).sum() / g["count"].sum()
+    sd_weighted = np.sqrt(var_weighted)
+    cv = sd_weighted / weighted_mean
+    
+    se = sd_weighted / np.sqrt(n)
+    crit = t.ppf(0.975, max(n - 1, 1))
+    lo = weighted_mean - crit * se
+    hi = weighted_mean + crit * se
+    oss_stats.append({"tree_size": ts, "mean": weighted_mean, "sd": sd_weighted, "cv": cv, "lo": lo, "hi": hi, "n": n})
+oss_ci = pd.DataFrame(oss_stats)
 
-# Optional: connect points with lines
-plt.plot(iss_avg["tree_size"], iss_avg["objective"], color="blue", linestyle="--", alpha=0.5)
-plt.plot(oss_avg["tree_size"], oss_avg["objective"], color="red", linestyle="--", alpha=0.5)
+# Create two subplots
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 7))
 
-plt.xlabel("Tree size")
-plt.ylabel("Average objective value")
-plt.title("In-sample vs Out-of-sample objectives")
-plt.legend()
-plt.grid(True)
+# ========== Plot 1: ISS vs OOS curves ==========
+ax1.plot(iss_ci["tree_size"], iss_ci["mean"], color="blue", marker="o", linewidth=2.5, markersize=7, label="In-sample (ISS)")
+ax1.plot(oss_ci["tree_size"], oss_ci["mean"], color="red", marker="s", linewidth=2.5, markersize=7, label="Out-of-sample (OOS)")
+ax1.set_xlabel("Tree size", fontsize=12)
+ax1.set_ylabel("Objective value", fontsize=12)
+ax1.set_title("Stability: ISS vs OOS mean objectives", fontsize=13, fontweight="bold")
+ax1.legend(fontsize=11, loc="best")
+ax1.grid(True, alpha=0.3)
+
+# ========== Plot 2: Coefficient of Variation (CV) ==========
+ax2.plot(iss_ci["tree_size"], iss_ci["cv"], color="blue", marker="o", linewidth=2.5, markersize=7, label="ISS CV")
+ax2.plot(oss_ci["tree_size"], oss_ci["cv"], color="red", marker="s", linewidth=2.5, markersize=7, label="OOS CV")
+ax2.set_xlabel("Tree size", fontsize=12)
+ax2.set_ylabel("Coefficient of Variation (std/mean)", fontsize=12)
+ax2.set_title("Relative variability: CV across instances", fontsize=13, fontweight="bold")
+ax2.legend(fontsize=11, loc="best")
+ax2.grid(True, alpha=0.3)
+
+plt.tight_layout()
 plt.show()
+
+# Optional: print summary table
+print("\n=== Summary Statistics ===\n")
+print("ISS (In-sample):")
+print(iss_ci[["tree_size", "mean", "sd", "cv", "n"]].to_string(index=False))
+print("\nOSS (Out-of-sample):")
+print(oss_ci[["tree_size", "mean", "sd", "cv", "n"]].to_string(index=False))
+print("\n")

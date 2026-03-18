@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
 from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
@@ -82,12 +81,6 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=True,
     help="Use nested in-sample trees per replication (size k extends size k-1). Default: True. Use --no-nested_trees to disable."
-)
-
-parser.add_argument(
-    "--append",
-    action="store_true",
-    help="Append to existing ISS/OSS files instead of overwriting. Automatically continues from the next instance_id."
 )
 
 args = parser.parse_args()
@@ -177,39 +170,13 @@ var_groups = ["eta", "gamma_LT", "gamma_ST", "alpha"]
 results_path = Path("results/stability") / args.case / args.method / "ISS.csv"
 results_path.parent.mkdir(parents=True, exist_ok=True)
 
-# Determine starting instance_id and handle append mode
-start_instance_id = 1
-if args.append and results_path.exists():
-    iss_data = pd.read_csv(results_path)
-    start_instance_id = int(iss_data["instance_id"].max()) + 1
-    print(f"Appending mode: continuing from instance_id={start_instance_id}")
-    
-    # Warm up RNG to skip to the correct point in the sequence
-    # This ensures we get NEW scenarios, not repeats of old ones
-    skip_count = start_instance_id - 1
-    if args.nested_trees:
-        # Nested: 1 rng.choice() call per instance
-        for _ in range(skip_count):
-            _ = rng.choice(iss_pool, size=max(scenario_tree_sizes), replace=False)
-    else:
-        # Non-nested: len(scenario_tree_sizes) rng.choice() calls per instance
-        for _ in range(skip_count * len(scenario_tree_sizes)):
-            _ = rng.choice(iss_pool, size=max(scenario_tree_sizes), replace=False)
-    print(f"RNG warmed up: skipped {skip_count} instance(s) to sync with seed and sequence")
-else:
-    # Overwrite mode: start fresh
-    with results_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "instance_id", "tree_size", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "downtime_cost", "travel_cost_S", "travel_cost_M", "runtime", "MIPGap", "gamma_LT", "gamma_ST", "scenarios", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
-        ])
-    if not args.append:
-        print(f"Fresh start: instance_id=1")
+with results_path.open("w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow([
+        "instance_id", "tree_size", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "downtime_cost", "travel_cost_S", "travel_cost_M", "runtime", "MIPGap", "gamma_LT", "gamma_ST", "scenarios", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
+    ])
 
-for j_offset in range(n_trees):
-    j = start_instance_id - 1 + j_offset
-    actual_instance_id = j + 1
-    
+for j in range(n_trees):
     sampled_scenarios = _sample_scenarios_for_replication()
 
     for st_size in scenario_tree_sizes:
@@ -236,12 +203,12 @@ for j_offset in range(n_trees):
             
         if solution not in cache[st_size]:
             cache[st_size][solution] = []
-        cache[st_size][solution].append(actual_instance_id)
+        cache[st_size][solution].append(j + 1)
         
         with results_path.open("a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([   
-                actual_instance_id,
+                j + 1,
                 st_size, 
                 model.ObjVal,
                 model.first_obj.getValue(),
@@ -264,16 +231,15 @@ for j_offset in range(n_trees):
             ])
 
 
-oss_results_path = Path("results/stability") / args.case / args.method / "OSS.csv"
-oss_results_path.parent.mkdir(parents=True, exist_ok=True)
 
-# In append mode, leave OSS.csv as is; otherwise (re)create it fresh
-if not args.append or not oss_results_path.exists():
-    with oss_results_path.open("w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "tree_size", "count", "instances", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "downtime_cost", "travel_cost_S", "travel_cost_M", "gamma_LT", "gamma_ST", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
-        ])
+results_path = Path("results/stability") / args.case / args.method / "OSS.csv"
+results_path.parent.mkdir(parents=True, exist_ok=True)
+
+with results_path.open("w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow([
+        "tree_size", "count", "instances", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "downtime_cost", "travel_cost_S", "travel_cost_M", "gamma_LT", "gamma_ST", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
+    ])
 
 # The true distribution is the same for all solutions
 true_distribution = oos_pool
@@ -308,7 +274,7 @@ def evaluate_solution(solution):
         results["charter_cost_ST"] += model.charter_cost_ST.getValue()
         results["charter_cost_LT"] += model.charter_cost_LT.getValue()
 
-    # Divide all results by the number of scenarios to get average cost per scenario
+    #divide all results by the number of scenarios to get average cost per scenario
     results = {key: val / len(true_distribution) for key, val in results.items()}
 
     return results
@@ -330,7 +296,7 @@ for tree_size, sol_dict in cache.items():
         gamma_LT_str = _encode_solution_group(solution, "gamma_LT")
         gamma_ST_str = _encode_solution_group(solution, "gamma_ST")
         
-        with oss_results_path.open("a", newline="") as f:
+        with results_path.open("a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([
                 tree_size,
@@ -352,10 +318,3 @@ for tree_size, sol_dict in cache.items():
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
                 int(args.nested_trees)
             ])
-
-if args.append:
-    print(f"Results appended: instance_id {start_instance_id} to {start_instance_id + n_trees - 1}")
-    print(f"Seed {args.seed} was automatically advanced to generate new independent scenarios.")
-    print(f"To continue: use '--append' flag with same parameters")
-else:
-    print(f"Fresh results written. To continue appending later, use '--append' flag.")
