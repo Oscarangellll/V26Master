@@ -1,0 +1,34 @@
+[2026-03-18 09:36:37] START case=1W1B method=mip tree_size=5 n_instances=6
+[2026-03-18 09:37:30] GRID_START wave=1.50 one_way_hours=0.50
+[2026-03-18 09:42:09] GRID_DONE wave=1.50 one_way_hours=0.50 iss_mean=19038781.58 oos_mean=18779453.63 pct_runs_with_ctv=0.667
+[2026-03-18 09:42:09] GRID_START wave=1.50 one_way_hours=1.00
+[2026-03-18 09:45:03] GRID_DONE wave=1.50 one_way_hours=1.00 iss_mean=19078441.81 oos_mean=18810756.64 pct_runs_with_ctv=0.667
+[2026-03-18 09:45:03] GRID_START wave=1.50 one_way_hours=1.50
+[2026-03-18 09:48:16] GRID_DONE wave=1.50 one_way_hours=1.50 iss_mean=19101865.76 oos_mean=18836496.17 pct_runs_with_ctv=0.667
+[2026-03-18 09:48:17] GRID_START wave=1.50 one_way_hours=2.00
+[2026-03-18 09:50:29] GRID_DONE wave=1.50 one_way_hours=2.00 iss_mean=19121941.52 oos_mean=18813948.00 pct_runs_with_ctv=0.333
+[2026-03-18 09:50:29] GRID_START wave=1.60 one_way_hours=0.50
+[2026-03-18 09:55:11] GRID_DONE wave=1.60 one_way_hours=0.50 iss_mean=18989653.20 oos_mean=18809043.00 pct_runs_with_ctv=0.833
+[2026-03-18 09:55:11] GRID_START wave=1.60 one_way_hours=1.00
+[2026-03-18 09:59:20] GRID_DONE wave=1.60 one_way_hours=1.00 iss_mean=19044466.29 oos_mean=18846041.31 pct_runs_with_ctv=0.833
+[2026-03-18 09:59:20] GRID_START wave=1.60 one_way_hours=1.50
+[2026-03-18 10:02:31] GRID_DONE wave=1.60 one_way_hours=1.50 iss_mean=19071470.51 oos_mean=18882361.98 pct_runs_with_ctv=0.667
+[2026-03-18 10:02:32] GRID_START wave=1.60 one_way_hours=2.00
+[2026-03-18 10:05:55] GRID_DONE wave=1.60 one_way_hours=2.00 iss_mean=19100017.65 oos_mean=18845351.17 pct_runs_with_ctv=0.500
+[2026-03-18 10:05:55] GRID_START wave=1.80 one_way_hours=0.50
+[2026-03-18 10:57:38] GRID_DONE wave=1.80 one_way_hours=0.50 iss_mean=18545802.04 oos_mean=18883413.38 pct_runs_with_ctv=1.000
+[2026-03-18 10:57:39] GRID_START wave=1.80 one_way_hours=1.00
+[2026-03-18 11:11:54] GRID_DONE wave=1.80 one_way_hours=1.00 iss_mean=18716755.95 oos_mean=18746717.31 pct_runs_with_ctv=1.000
+[2026-03-18 11:11:55] GRID_START wave=1.80 one_way_hours=1.50
+[2026-03-18 11:17:38] GRID_DONE wave=1.80 one_way_hours=1.50 iss_mean=18827904.86 oos_mean=18778838.76 pct_runs_with_ctv=1.000
+[2026-03-18 11:17:38] GRID_START wave=1.80 one_way_hours=2.00
+[2026-03-18 11:22:53] GRID_DONE wave=1.80 one_way_hours=2.00 iss_mean=18910427.22 oos_mean=18739241.30 pct_runs_with_ctv=1.000
+[2026-03-18 11:22:53] GRID_START wave=2.00 one_way_hours=0.50
+[2026-03-18 11:32:15] GRID_DONE wave=2.00 one_way_hours=0.50 iss_mean=15677284.58 oos_mean=15972575.41 pct_runs_with_ctv=1.000
+[2026-03-18 11:32:15] GRID_START wave=2.00 one_way_hours=1.00
+[2026-03-18 12:15:37] GRID_DONE wave=2.00 one_way_hours=1.00 iss_mean=16964077.55 oos_mean=17490919.65 pct_runs_with_ctv=1.000
+[2026-03-18 12:15:38] GRID_START wave=2.00 one_way_hours=1.50
+[2026-03-18 13:19:07] GRID_DONE wave=2.00 one_way_hours=1.50 iss_mean=18134283.57 oos_mean=18773178.55 pct_runs_with_ctv=1.000
+[2026-03-18 13:19:08] GRID_START wave=2.00 one_way_hours=2.00
+[2026-03-18 13:56:32] GRID_DONE wave=2.00 one_way_hours=2.00 iss_mean=18708998.08 oos_mean=18720332.37 pct_runs_with_ctv=1.000
+[2026-03-18 13:56:33] END completed=16

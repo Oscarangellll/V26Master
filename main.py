@@ -7,16 +7,16 @@ from optimization_models.optimization_model import OptimizationModel
 case = CaseConfig("cases/1W1B.yaml")
 var_groups = ["gamma_ST", "gamma_LT", "alpha", "eta"]
 
-scenario = ScenarioConfig(case, [6])
+scenario = ScenarioConfig(case, [10])
 
 model = OptimizationModel(case, scenario)
 model.Params.OutputFlag = 0
-model.addConstr(model.gamma_LT["SOV", "3"] == 0, name="fix_gamma_LT_1")
-# model.addConstr(model.gamma_LT["CTV", "3"] == 0, name="fix_gamma_LT_0")
-model.addConstrs(
-    (model.gamma_ST[h,"3", t] == 0 for h in model.case.H for t in case.periods),
-    name="fix_gamma_ST_0"
-)
+# model.addConstr(model.gamma_LT["SOV", "3"] == 0, name="fix_gamma_LT_1")
+# # model.addConstr(model.gamma_LT["CTV", "3"] == 0, name="fix_gamma_LT_0")
+# model.addConstrs(
+#     (model.gamma_ST[h,"3", t] == 0 for h in model.case.H for t in case.periods),
+#     name="fix_gamma_ST_0"
+# )
 
 model.optimize()
 print(f"Objective value: {model.ObjVal}")
@@ -32,9 +32,9 @@ solution = frozenset(
     for var_group in var_groups
     for key, var in getattr(model, var_group).items()
 )
-# for (var_group, key), val in solution:
-#     if val > 0.5:
-#         print(var_group, key, val)
+for (var_group, key), val in solution:
+    if val > 0.5:
+        print(var_group, key, val)
 #plot model.b across the time periods for each maintenance category:
 import matplotlib.pyplot as plt
 for m in model.case.maintenance_categories:

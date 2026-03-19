@@ -18,8 +18,9 @@ class OptimizationModel:
         T = self.case.T
 
         # First stage parameters
-        C_ST = self.case.C_ST
-        C_LT = self.case.C_LT
+        C_ST = self.case.C_ST #30 * day rate
+        C_LT = self.case.C_LT #360 * day rate
+        C_mob = self.case.C_mob # mobilisation rate
         C_B = self.case.C_B
         K_MAX = self.case.K_MAX
         K_REQ = self.case.K_REQ
@@ -27,6 +28,7 @@ class OptimizationModel:
         # First stage variables
         gamma_ST = model.addVars(H, B, T, vtype=gp.GRB.INTEGER)
         gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER)
+        sigma = model.addVars(H, T, vtype=gp.GRB.INTEGER)
         
         alpha = model.addVars(
             ((v, b, t)
@@ -40,6 +42,13 @@ class OptimizationModel:
         eta = model.addVars(B, vtype=gp.GRB.BINARY)        
 
         # First stage objective
+        
+        charter_cost_mob = gp.quicksum(
+            C_mob[h] * sigma[h, t]
+            for h in H
+            for t in T
+        )
+        
         charter_cost_ST = gp.quicksum(
             C_ST[h, t] * gamma_ST[h, b, t]
             for h in H
@@ -55,7 +64,7 @@ class OptimizationModel:
             C_B[b] * eta[b]
             for b in B
         )
-        first_obj = charter_cost_ST + charter_cost_LT + base_cost
+        first_obj = base_cost + charter_cost_mob + charter_cost_ST + charter_cost_LT
 
         # First stage constraints
         model.addConstrs(
@@ -87,6 +96,26 @@ class OptimizationModel:
             for (v1, v2) in zip(V[h], V[h][1:])
             for t in T),
             name=f"symmetry_break_ST"
+        )
+        
+        model.addConstrs(
+            (sigma[h, "Jan"] == gp.quicksum(gamma_ST[h, b, "Jan"] + gamma_LT[h, b] for b in B)
+            for h in H),
+            name="mobilization_Jan"
+        )
+        
+        model.addConstrs(
+            (sigma[h, T[t]] >= gp.quicksum(gamma_ST[h, b, T[t]] - gamma_ST[h, b, T[t-1]] for b in B)
+            for h in H
+            for t in range(1, len(T))),
+            name="mobilization_other_months",
+        )
+        
+        model.addConstrs(
+            (sigma[h, t] >= 0
+            for h in H
+            for t in T),
+            name="mobilization_nonnegativity"
         )
 
         if self.case.one_base:
@@ -419,6 +448,7 @@ class OptimizationModel:
 
         self.charter_cost_ST = charter_cost_ST
         self.charter_cost_LT = charter_cost_LT
+        self.charter_cost_mob = charter_cost_mob
         self.base_cost = base_cost
         self.first_obj = first_obj
         self.travel_cost_S = travel_cost_S

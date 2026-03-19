@@ -87,6 +87,13 @@ class CaseConfig:
             h.name: h.cost_LT(self.days_per_period, len(self.T))
             for h in self.vessel_types
         }
+        
+    @property
+    def C_mob(self):
+        return {
+            h.name: h.cost_mob()
+            for h in self.vessel_types
+        }
 
     @property
     def C_B(self):

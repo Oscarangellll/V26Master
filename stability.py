@@ -201,7 +201,7 @@ else:
     with results_path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
-            "instance_id", "tree_size", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "downtime_cost", "travel_cost_S", "travel_cost_M", "runtime", "MIPGap", "gamma_LT", "gamma_ST", "scenarios", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
+            "instance_id", "tree_size", "objective", "first_stage_cost", "second_stage_cost", "charter_cost_ST", "charter_cost_LT", "charter_cost_mob","downtime_cost", "travel_cost_S", "travel_cost_M", "runtime", "MIPGap", "gamma_LT", "gamma_ST", "scenarios", "param_signature", "seed", "iss_pool", "oos_pool", "nested_trees"
         ])
     if not args.append:
         print(f"Fresh start: instance_id=1")
@@ -248,6 +248,7 @@ for j_offset in range(n_trees):
                 model.second_obj.getValue(),
                 model.charter_cost_ST.getValue(),
                 model.charter_cost_LT.getValue(),
+                model.charter_cost_mob.getValue(),
                 model.downtime_cost.getValue(),
                 model.travel_cost_S.getValue(),
                 model.travel_cost_M.getValue(),

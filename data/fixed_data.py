@@ -18,10 +18,13 @@ class VesselType:
     periodic_return: int | None = None
 
     def cost_ST(self, days):
-        return self.day_rate * days + self.mob_rate
+        return self.day_rate * days #+ self.mob_rate
 
     def cost_LT(self, days, n_periods):
-        return self.day_rate * days * n_periods + self.mob_rate
+        return self.day_rate * days * n_periods #+ self.mob_rate
+    
+    def cost_mob(self):
+        return self.mob_rate
 
 @dataclass
 class WindFarm:
@@ -60,7 +63,7 @@ class PowerCurve:
         self._power = df["power"].to_numpy() / 1000 # MW
 
     def __call__(self, speed):
-        return np.interp(speed, self._speed, self._power)
+        return np.interp(speed, self._speed, self._power, left=0, right=0)
 
 class FixedData:
     days_per_period = 30
