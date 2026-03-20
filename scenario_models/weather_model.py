@@ -5,9 +5,9 @@ import pandas as pd
 from data.fixed_data import data
 
 class WeatherModel:
-    def __init__(self, resolution_speed=1, resolution_height=0.1):
-        self.rs = resolution_speed
-        self.rh = resolution_height
+    def __init__(self):
+        self.rs = data.wind_speed_resolution  
+        self.rh = data.wave_height_resolution 
 
         self._models = {}
 
@@ -15,12 +15,10 @@ class WeatherModel:
 
     def _fit(self):
         
-        df_weather = pd.read_csv(
-            "data/weather/weather.csv",
-            index_col="time",
-            parse_dates=True,
+        df_weather = pd.read_parquet(
+            "data/weather/weather.parquet"
         )
-            
+
         for wl_id, df_wl in df_weather.groupby("weather_location_id"):
             y = df_wl[["speed", "height"]].to_numpy(copy=True)
             T, K = y.shape

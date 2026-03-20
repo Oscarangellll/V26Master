@@ -18,10 +18,10 @@ class VesselType:
     periodic_return: int | None = None
 
     def cost_ST(self, days):
-        return self.day_rate * days #+ self.mob_rate
+        return self.day_rate * days
 
     def cost_LT(self, days, n_periods):
-        return self.day_rate * days * n_periods #+ self.mob_rate
+        return self.day_rate * days * n_periods
     
     def cost_mob(self):
         return self.mob_rate
@@ -63,18 +63,9 @@ class PowerCurve:
         self._power = df["power"].to_numpy() / 1000 # MW
 
     def __call__(self, speed):
-        return np.interp(speed, self._speed, self._power, left=0, right=0)
+        return np.interp(speed, self._speed, self._power, left=0.0, right=0.0)
 
 class FixedData:
-    days_per_period = 30
-    
-    periods = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    ]
-
-    days = [d + 1 for d in range(len(periods) * days_per_period)]
-
     vessel_types = [
         VesselType("CTV",
             required_capacity=1,
@@ -137,6 +128,27 @@ class FixedData:
             iso="DEU",
             weather_location_id=2,
         ),
+        WindFarm("F",
+            lat=53.68,
+            lon=6.73,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=3
+        ),
+        WindFarm("G",
+            lat=53.74,
+            lon=6.94,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=3,
+        ),
+        WindFarm("H",
+            lat=53.79,
+            lon=7.37,
+            n_turbines=100,
+            iso="DEU",
+            weather_location_id=3,
+        )
     ]
 
     weather_locations = [
@@ -197,16 +209,30 @@ class FixedData:
         ),
     ]
     
-
     power_curve = PowerCurve()
-
+    
     price_from_year = 2023
     price_to_year = 2025
+    
+    days_per_period = 30
+    
+    periods = [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ]
 
     travel_threshold_hours = 12
 
     # 07:00 = 7 etc
     work_day_start = 7
     work_day_end = 19
+
+    n_scenarios_to_generate = 5 
+    generate_scenarios_seed = 20
+    
+    wind_speed_resolution = 1
+    wave_height_resolution = 0.1
+
+    work_friction = 0.0
 
 data = FixedData()

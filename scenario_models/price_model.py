@@ -13,18 +13,10 @@ class PriceModel:
 
 
     def _fit(self):
-        df_weather = pd.read_csv(
-            "data/weather/weather.csv",
-            index_col="time",
-            usecols=["time", "speed", "weather_location_id"],
-            parse_dates=True
-        )
-
-        df_price = pd.read_csv(
-            "data/price/price.csv",
-            index_col="date",
-            parse_dates=True
-        )
+        
+        df_weather = pd.read_parquet("data/weather/weather.parquet")
+        
+        df_price = pd.read_parquet("data/price/price.parquet")
 
         for iso, df_price_iso in df_price.groupby("ISO3"):
             weather_location_ids = sorted({

@@ -2,10 +2,11 @@
 import gurobipy as gp
 
 class OptimizationModel:
-    def __init__(self, case, scenario):
+    def __init__(self, case, scenario, scenario_ids):
         
         self.case = case
         self.scenario = scenario
+        self.scenario_ids = scenario_ids
 
         model = gp.Model()
         
@@ -132,7 +133,7 @@ class OptimizationModel:
         D_T = self.case.D_T
         K_S = self.scenario.K_S
         K_M = self.scenario.K_M
-        S = self.scenario.S
+        S = self.scenario_ids
 
         # Second stage parameters
         F = self.scenario.F
@@ -164,7 +165,7 @@ class OptimizationModel:
             for w in W 
             for d in D 
             for s in S 
-            for k in K_S[h, b, w, d, s]),
+            for k in K_S[s][h, b, w, d]),
             vtype=gp.GRB.INTEGER
         )
 
@@ -174,7 +175,7 @@ class OptimizationModel:
             for w in W 
             for d in D 
             for s in S 
-            for k in K_M[h, w, d, s]),
+            for k in K_M[s][h, w, d]),
             vtype=gp.GRB.INTEGER,
         )
 
@@ -214,7 +215,7 @@ class OptimizationModel:
 
         # Second-stage objective
         downtime_cost = gp.quicksum(
-            C_D[w, d, s] * b[w, m, d, s]
+            C_D[s][w, d] * b[w, m, d, s]
             for w in W 
             for m in M 
             for d in D
@@ -300,7 +301,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (gp.quicksum(lmbd_S[h, b, w, d, k, s] for k in K_S[h, b, w, d, s]) <= N[h] * x[h, b, w, d, s]
+            (gp.quicksum(lmbd_S[h, b, w, d, k, s] for k in K_S[s][h, b, w, d]) <= N[h] * x[h, b, w, d, s]
             for h in H_S 
             for w in W
             for b in B
@@ -310,7 +311,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (gp.quicksum(lmbd_M[h, w, d, k, s] for k in K_M[h, w, d, s]) <= gp.quicksum(N[h] * delta[v, w, d, s] for v in V[h])
+            (gp.quicksum(lmbd_M[h, w, d, k, s] for k in K_M[s][h, w, d]) <= gp.quicksum(N[h] * delta[v, w, d, s] for v in V[h])
             for h in H_M 
             for w in W
             for d in D
@@ -319,7 +320,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (z[w, m, d, s] <= gp.quicksum(P[m, k] * lmbd_M[h, w, d, k, s] for h in H_M for k in K_M[h, w, d, s]) + gp.quicksum(P[m, k] * lmbd_S[h, b, w, d, k, s] for h in H_S for b in B for k in K_S[h, b, w, d, s])
+            (z[w, m, d, s] <= gp.quicksum(P[m, k] * lmbd_M[h, w, d, k, s] for h in H_M for k in K_M[s][h, w, d]) + gp.quicksum(P[m, k] * lmbd_S[h, b, w, d, k, s] for h in H_S for b in B for k in K_S[s][h, b, w, d])
             for w in W
             for m in M
             for d in D
@@ -328,7 +329,7 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (b[w, m, d, s] == b[w, m, d-1, s] + F[w, m, d, s] - z[w, m, d, s]
+            (b[w, m, d, s] == b[w, m, d-1, s] + F[s][w, m, d] - z[w, m, d, s]
             for w in W
             for m in M
             for d in D
