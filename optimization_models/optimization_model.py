@@ -437,28 +437,34 @@ class OptimizationModel:
         
         model.setObjective(first_obj + second_obj)
 
-        
         self.model = model
 
         self.gamma_ST = gamma_ST
         self.gamma_LT = gamma_LT
+        self.sigma = sigma
         self.alpha = alpha
         self.eta = eta
-        self.b = b
-        self.S = S
 
         self.charter_cost_ST = charter_cost_ST
         self.charter_cost_LT = charter_cost_LT
         self.charter_cost_mob = charter_cost_mob
         self.base_cost = base_cost
         self.first_obj = first_obj
+
+        self.x = x
+        self.delta = delta
+        self.lmbd_S = lmbd_S
+        self.lmbd_M = lmbd_M
+        self.z = z
+        self.b = b
+        self.f = f
+        self.r_S = r_S
+        self.r_E = r_E
+        
+        self.downtime_cost = downtime_cost
         self.travel_cost_S = travel_cost_S
         self.travel_cost_M = travel_cost_M
-        self.downtime_cost = downtime_cost
-        self.first_obj = first_obj
         self.second_obj = second_obj
-
-
 
     def __getattr__(self, name):
         return getattr(self.model, name)

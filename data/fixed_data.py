@@ -18,7 +18,7 @@ class VesselType:
     periodic_return: int | None = None
 
     def cost_ST(self, days):
-        return self.day_rate * days
+        return self.day_rate * days * 1.05
 
     def cost_LT(self, days, n_periods):
         return self.day_rate * days * n_periods
@@ -75,7 +75,7 @@ class FixedData:
             n_teams=3,
             travel_speed=35,
             max_wind=25,
-            max_wave=1.5,
+            max_wave=1.7,
             cost_per_km=8,
         ),
         VesselType("SOV",
@@ -131,14 +131,14 @@ class FixedData:
         WindFarm("F",
             lat=53.68,
             lon=6.73,
-            n_turbines=100,
+            n_turbines=50,
             iso="DEU",
             weather_location_id=3
         ),
         WindFarm("G",
             lat=53.74,
             lon=6.94,
-            n_turbines=100,
+            n_turbines=60,
             iso="DEU",
             weather_location_id=3,
         ),
@@ -227,8 +227,8 @@ class FixedData:
     work_day_start = 7
     work_day_end = 19
 
-    n_scenarios_to_generate = 5 
-    generate_scenarios_seed = 20
+    n_scenarios_to_generate = 100 
+    generate_scenarios_seed = 676767 
     
     wind_speed_resolution = 1
     wave_height_resolution = 0.1
