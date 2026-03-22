@@ -97,7 +97,7 @@ def _fix_solution(model, solution):
         var.UB = value
 
 
-def _evaluate_solution(case, solution, oos_scenarios):
+def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
     totals = {
         "objective": 0.0,
         "first_stage_cost": 0.0,
@@ -114,7 +114,6 @@ def _evaluate_solution(case, solution, oos_scenarios):
 
     for scenario_id in oos_scenarios:
         scenario_ids = [int(scenario_id)]
-        scenario_cfg = ScenarioConfig(case, scenario_ids)
         model = OptimizationModel(case, scenario_cfg, scenario_ids)
         model.Params.OutputFlag = 0
 
@@ -218,7 +217,8 @@ def run_oos(args, iss_file: str):
             if key in eval_cache:
                 result = eval_cache[key]
             else:
-                result = _evaluate_solution(case, solution, oos_scenarios)
+                scenario_cfg = ScenarioConfig(case, oos_scenarios)
+                result = _evaluate_solution(case, solution, oos_scenarios, scenario_cfg)
                 eval_cache[key] = result
 
             meta = sol_meta[solution]
