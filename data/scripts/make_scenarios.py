@@ -53,7 +53,7 @@ def _make_weather_windows():
 
         for (s, wl_id, d), group in df.groupby(["s", "wl_id", "d"]):
             feasible = (
-                (group["height"] <= max_height)
+                group["height"] <= max_height
             ).to_numpy().astype(int)
 
             max_len = 0
