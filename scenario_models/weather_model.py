@@ -36,11 +36,11 @@ class WeatherModel:
                 y[idx] = (y[idx] - monthly_mean[m]) / monthly_std[m]
 
             bin_width = np.array([self.rs, self.rh]) / monthly_std.mean(axis=0)
-
+            
             bins = []
             for k in range(K):
                 bins.append(np.arange(y[:, k].min(), y[:, k].max() + bin_width[k], bin_width[k]))
-
+            
             idx = np.empty((T, K), dtype=int)
             for k in range(K):
                 idx[:, k] = np.digitize(y[:, k], bins[k]) - 1
