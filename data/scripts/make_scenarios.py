@@ -49,12 +49,10 @@ def _make_weather_windows():
 
     rows = []
     for h in data.vessel_types:
-        max_speed = h.max_wind
         max_height = h.max_wave
 
         for (s, wl_id, d), group in df.groupby(["s", "wl_id", "d"]):
             feasible = (
-                (group["speed"] <= max_speed) &
                 (group["height"] <= max_height)
             ).to_numpy().astype(int)
 

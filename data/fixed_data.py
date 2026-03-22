@@ -126,28 +126,28 @@ class FixedData:
             lon=5.03,
             n_turbines=70,
             iso="NLD",
-            weather_location_id=5,
+            weather_location_id=4,
         ),
         WindFarm("F",
             lat=52.55,
             lon=4.22,
             n_turbines=50,
-            iso="DEU",
-            weather_location_id=5
+            iso="NLD",
+            weather_location_id=4
         ),
         WindFarm("G",
             lat=53.3,
             lon=1.37,
             n_turbines=60,
             iso="GBR",
-            weather_location_id=6,
+            weather_location_id=5,
         ),
         WindFarm("H",
             lat=53.99,
             lon=0.48,
             n_turbines=80,
             iso="GBR",
-            weather_location_id=6,
+            weather_location_id=5,
         ),
     ]
 
@@ -254,8 +254,8 @@ class FixedData:
     work_day_start = 7
     work_day_end = 19
 
-    n_scenarios_to_generate = 300 
-    generate_scenarios_seed = 676769 
+    n_scenarios_to_generate = 10 
+    generate_scenarios_seed = 676767 
     
     wind_speed_resolution = 1
     wave_height_resolution = 0.1
