@@ -1,21 +1,40 @@
+import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import t
 
+parser = argparse.ArgumentParser(description="Plot ISS vs OOS stability curves")
+parser.add_argument(
+    "--iss_file",
+    default="results/stability/1W1B/mip/ISS.csv",
+    help="Path to ISS.csv",
+)
+parser.add_argument(
+    "--oss_file",
+    default="results/stability/1W1B/mip/OSS.csv",
+    help="Path to OSS.csv",
+)
+parser.add_argument(
+    "--no_show",
+    action="store_true",
+    help="Skip opening the interactive plot window",
+)
+args = parser.parse_args()
+
 # Read the results
-iss = pd.read_csv("results/stability/1W1B/mip/ISS.csv")
-oss = pd.read_csv("results/stability/1W1B/mip/OSS.csv")
+iss = pd.read_csv(args.iss_file)
+oss = pd.read_csv(args.oss_file)
 
 # Compute ISS statistics per tree size
 iss_stats = []
 for ts, g in iss.groupby("tree_size"):
     n = len(g)
     mean = g["objective"].mean()
-    sd = g["objective"].std(ddof=1)
-    cv = sd / mean  # Coefficient of variation
-    se = sd / np.sqrt(n)
-    crit = t.ppf(0.975, n - 1)
+    sd = g["objective"].std(ddof=1) if n > 1 else 0.0
+    cv = sd / mean if mean != 0 else np.nan
+    se = sd / np.sqrt(max(n, 1))
+    crit = t.ppf(0.975, max(n - 1, 1))
     lo = mean - crit * se
     hi = mean + crit * se
     iss_stats.append({"tree_size": ts, "mean": mean, "sd": sd, "cv": cv, "lo": lo, "hi": hi, "n": n})
@@ -30,9 +49,9 @@ for ts, g in oss.groupby("tree_size"):
     # Compute variance of weighted average
     var_weighted = ((g["objective"] - weighted_mean) ** 2 * g["count"]).sum() / g["count"].sum()
     sd_weighted = np.sqrt(var_weighted)
-    cv = sd_weighted / weighted_mean
+    cv = sd_weighted / weighted_mean if weighted_mean != 0 else np.nan
     
-    se = sd_weighted / np.sqrt(n)
+    se = sd_weighted / np.sqrt(max(n, 1))
     crit = t.ppf(0.975, max(n - 1, 1))
     lo = weighted_mean - crit * se
     hi = weighted_mean + crit * se
@@ -61,7 +80,8 @@ ax2.legend(fontsize=11, loc="best")
 ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.show()
+if not args.no_show:
+    plt.show()
 
 # Optional: print summary table
 print("\n=== Summary Statistics ===\n")
