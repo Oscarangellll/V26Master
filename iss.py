@@ -9,6 +9,7 @@ import numpy as np
 from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
 from optimization_models.optimization_model import OptimizationModel
+from optimization_models.consensus_model import ConsensusModel
 
 
 ISS_COLUMNS = [
@@ -151,9 +152,41 @@ def run_iss(args) -> str:
         for tree_size in scenario_tree_sizes:
             scenario_ids = [int(s) for s in sampled[tree_size]]
             scenario_cfg = ScenarioConfig(case, scenario_ids)
-            model = OptimizationModel(case, scenario_cfg, scenario_ids)
-            model.Params.OutputFlag = 0
-            model.optimize()
+            #####
+            if args.method == "mip":
+                model = OptimizationModel(case, scenario_cfg, scenario_ids)
+                model.Params.OutputFlag = 0
+                model.Params.MIPGap = 0.02
+                model.optimize()
+            elif args.method == "con":
+                judge_seeds = scenario_ids
+                master_scenarios = judge_seeds[:]
+                
+                cm = ConsensusModel(
+                    case, 
+                    scenario_cfg, 
+                    judge_seeds_1scenario_each=judge_seeds,
+                    mip_gap_judges=0.2,
+                    log=False
+                )
+                
+                model, runtime = cm.optimize(
+                    master_scenarios=master_scenarios,
+                    eta_max_iters=50,
+                    lt_max_iters=200,
+                    top_k_eta=1,
+                    top_k_lt=1,
+                    min_p=0.55,
+                    max_p=0.95,
+                    aggregator="mean",
+                    tighten_ub_st=True,
+                    unanim_fix_zero_st=True,
+                    mip_gap_master=0.02
+                )
+                
+            else:
+                raise ValueError(f"Unsupported method: {args.method}")
+            
 
             solution = frozenset(
                 ((group, key), int(var.X))
@@ -173,7 +206,7 @@ def run_iss(args) -> str:
                 model.downtime_cost.getValue(),
                 model.travel_cost_S.getValue(),
                 model.travel_cost_M.getValue(),
-                model.Runtime,
+                model.Runtime if args.method == "mip" else runtime,
                 model.MIPGap,
                 _encode_solution_group(solution, "eta"),
                 _encode_solution_group(solution, "gamma_LT"),
@@ -197,7 +230,7 @@ def run_iss(args) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run ISS and write ISS.csv")
     parser.add_argument("-c", "--case", required=True)
-    parser.add_argument("-m", "--method", default="mip", choices=["mip"])
+    parser.add_argument("-m", "--method", default="mip", choices=["mip", "con"])
     parser.add_argument("-n", "--n_trees", type=int, required=True)
     parser.add_argument("-s", "--scenario_tree_sizes", type=int, nargs="+", required=True)
     parser.add_argument("--seed", type=int, default=99)

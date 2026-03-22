@@ -6,8 +6,8 @@
 
 max_multiday_vessels: 2
 
-bases: ["3"]
+bases: ["5"]
 
 one_base: True
 
-wind_farms: ["C"]
+wind_farms: ["D"]
