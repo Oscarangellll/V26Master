@@ -524,6 +524,7 @@ class ConsensusModel:
         master_cfg = ScenarioConfig(self.case, scenario_ids=master_scenarios)
         master = OptimizationModel(self.case, master_cfg, master_scenarios)
         master.setParam("MIPGap", float(mip_gap_master))
+        master.setParam("OutputFlag", 0)
         master.model.update()
 
         # Apply persistent state directly on master
