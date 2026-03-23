@@ -116,6 +116,7 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         scenario_ids = [int(scenario_id)]
         model = OptimizationModel(case, scenario_cfg, scenario_ids)
         model.Params.OutputFlag = 0
+        model.Params.MIPGap = 0.02
 
         _fix_solution(model, solution)
         model.optimize()
