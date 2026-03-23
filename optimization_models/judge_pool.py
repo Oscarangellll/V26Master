@@ -24,11 +24,13 @@ def _init_worker(
     from optimization_models.optimization_model import OptimizationModel
 
     m = OptimizationModel(case, scenario, [judge_seed])
-    m.build_model()
 
     m.model.setParam("MIPGap", float(mip_gap))
     m.model.setParam("TimeLimit", 3600) #1 hr per judge solve max
     m.model.setParam("Threads", 1)  # CRITICAL: one core per judge
+    m.model.setParam("OutputFlag", 0)
+    
+    m.update()
 
     _WORKER["m"] = m
     _WORKER["seed"] = judge_seed  # Store seed for debugging
@@ -60,6 +62,11 @@ def _solve_one(fix_payload: Dict[str, Any]) -> Dict[str, Any]:
     bm = BoundManager(m)
     try:
         bm.apply_persistent_state(fix)
+        m.model.update()
+
+        # Mirror serial consensus behavior: clear stale warm-starts between experiments.
+        for var in m.model.getVars():
+            var.Start = -1
         m.model.update()
 
         t0 = time.perf_counter()

@@ -14,7 +14,7 @@ def build_parser() -> argparse.ArgumentParser:
         "-m",
         "--method",
         default="mip",
-        choices=["mip", "con"],
+        choices=["mip", "con", "con_mp"],
         help="Solution method (currently only mip is supported)",
     )
     parser.add_argument(

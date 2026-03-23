@@ -5,6 +5,7 @@ import statistics
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from optimization_models.bound_manager import DecisionKey, FixState, BoundManager
+from optimization_models.judge_pool import JudgePool
 
 # =====================================================================
 # Per-judge result + cache keying
@@ -39,7 +40,7 @@ class CacheKey:
 # =====================================================================
 # Consensus model
 # =====================================================================
-class ConsensusModel:
+class ConsensusModelMP:
     """
     Implements:
     - One OptimizationModel per judge (one scenario each)
@@ -57,51 +58,38 @@ class ConsensusModel:
         judge_seeds_1scenario_each: List[int],
         *,
         mip_gap_judges: float = 0.01,
+        cap_workers: int = 12,
         log: bool = True,
     ):
         self.case = case
         self.scenario = scenario
-        self.judges: List[Tuple[int]] = [(s,) for s in judge_seeds_1scenario_each]
+        
+        self.judge_seeds = list(judge_seeds_1scenario_each)
+        self.judges: List[Tuple[int]] = [(s,) for s in self.judge_seeds]
+        
         self.mip_gap_judges = float(mip_gap_judges)
+        self.cap_workers = cap_workers
         self.log = bool(log)
+        print(f" using judge seeds: {self.judge_seeds}")
+        self.pool = JudgePool(
+            case=case,
+            scenario=scenario,
+            judge_seeds=self.judge_seeds,
+            mip_gap_judges=mip_gap_judges,
+            cap_workers=cap_workers,
+            mp_start_method="spawn"
+        )
+        self.pool.start()
 
-        self.models: Dict[Tuple[int], Any] = {}  # judge -> OptimizationModel
-        self._build_judge_models()
-
-        # Per-judge cache: judge -> { CacheKey -> JudgeSolveResult }
-        self.cache: Dict[Tuple[int], Dict[CacheKey, JudgeSolveResult]] = {j: {} for j in self.judges}
+        # NOT Per-judge cache: judge -> { CacheKey -> JudgeSolveResult }
+        self._solve_cache: Dict[CacheKey, Dict[Tuple[int], JudgeSolveResult]] = {}
 
         self._t0 = time.perf_counter()
-
-    # -------------------------
-    # Construction / extraction
-    # -------------------------
-    def _build_judge_models(self) -> None:
-        from config.scenario_config import ScenarioConfig
-        from optimization_models.optimization_model import OptimizationModel
-
-        for judge in self.judges:
-            m = OptimizationModel(self.case, self.scenario, list(judge))
-            m.setParam("MIPGap", self.mip_gap_judges)
-            m.setParam("OutputFlag", 0)
-            self.models[judge] = m
-
-    def _extract_first_stage(self, m) -> Dict[DecisionKey, int]:
-        out: Dict[DecisionKey, int] = {}
-
-        for b in m.case.B:
-            out[("eta", b)] = int(round(m.eta[b].X))
-
-        for h in m.case.H:
-            for b in m.case.B:
-                out[("gamma_LT", (h, b))] = int(round(m.gamma_LT[h, b].X))
-
-        for h in m.case.H:
-            for b in m.case.B:
-                for t in m.case.T:
-                    out[("gamma_ST", (h, b, t))] = int(round(m.gamma_ST[h, b, t].X))
-
-        return out
+        
+    def close(self) -> None:
+        if getattr(self, "pool", None) is not None:
+            self.pool.close()
+            self.pool = None
 
     def _now(self) -> float:
         return time.perf_counter() - self._t0
@@ -109,56 +97,28 @@ class ConsensusModel:
     # -------------------------
     # Core solve w/ caching
     # -------------------------
-    def solve_judge(self, judge: Tuple[int], fix: FixState) -> JudgeSolveResult:
-        ck = CacheKey.from_fixstate(fix)
-        cached = self.cache[judge].get(ck, None)
-        if cached is not None:
-            return cached
-
-        m = self.models[judge]
-
-        bm = BoundManager(m)
-        try:
-            # DEBUG: Log what bounds we're applying
-            # if fix.fixed or fix.ub:
-            #     print(f"[JUDGE {judge}] Applying: {len(fix.fixed)} fixed, {len(fix.ub)} ub")
-            #     for k, v in list(fix.fixed.items())[:3]:
-            #         print(f"  fixed {k}={v}")
-            #     for k, u in list(fix.ub.items())[:3]:
-            #         print(f"  ub {k}<={u}")
-            
-            bm.apply_persistent_state(fix)
-            m.model.update()
-            
-            # Clear warm-start information to prevent Gurobi from using stale/invalid solutions
-            for var in m.model.getVars():
-                var.Start = -1
-            m.model.update()
-
-            t0 = time.perf_counter()
-            m.model.optimize()
-            t1 = time.perf_counter()
-
-            if m.model.SolCount == 0:
-                print(f"[JUDGE {judge}] INFEASIBLE: Status={m.model.Status}")
-                print(f"  Fixed: {dict(fix.fixed)}")
-                print(f"  UB: {dict(fix.ub)}")
-                raise RuntimeError(f"No solution for judge {judge}. Status={m.model.Status}")
-
-            res = JudgeSolveResult(
-                obj=float(m.model.ObjVal),
-                sol=self._extract_first_stage(m),
-                status=int(m.model.Status),
-                gap=float(getattr(m.model, "MIPGap", float("nan"))),
-                runtime=t1 - t0,
-            )
-            self.cache[judge][ck] = res
-            return res
-        finally:
-            bm.restore()
 
     def solve_all_judges(self, fix: FixState) -> Dict[Tuple[int], JudgeSolveResult]:
-        return {j: self.solve_judge(j, fix) for j in self.judges}
+        ck = CacheKey.from_fixstate(fix)
+        if ck in self._solve_cache:
+            return self._solve_cache[ck]
+        
+        outs = self.pool.solve_all(fix)
+        
+        results: Dict[Tuple[int], JudgeSolveResult] = {}
+        for seed, out in zip(self.judge_seeds, outs):
+            judge = (seed,)
+            if out["sol"] is None:
+                raise RuntimeError(f"Judge {judge} infeasible. Status={out['status']}")
+            results[judge] = JudgeSolveResult(
+                obj=out["obj"],
+                sol=out["sol"],
+                status=out["status"],
+                gap=out["gap"],
+                runtime=out["runtime"],
+            )
+        self._solve_cache[ck] = results
+        return results
 
     # -------------------------
     # Stats helpers
@@ -229,24 +189,6 @@ class ConsensusModel:
 
         candidates.sort(key=lambda x: (-x[0][0], -x[0][1])) 
         return [k for _, k in candidates[:top_k]] 
-    
-    def _propagate_one_base_eta(self, fix: FixState, k_star: DecisionKey, v_star: int) -> None:
-        """
-        If case.one_base is enforced and we fix eta[b]=1, then all other eta[b']=0
-        is implied and can be fixed immediately to avoid redundant solves.
-        """
-        if not getattr(self.case, "one_base", False):
-            return
-        group, b = k_star
-        if group != "eta":
-            return
-        if int(v_star) != 1:
-            return
-
-        for b2 in self.case.B:
-            if b2 != b:
-                fix.apply_fix(("eta", b2), 0)
-        print(f"Propagated one_base: fixed eta[{b}]=1 => all other eta=0")
 
     # -------------------------
     # Contrafactual experiment (two-way compare)
@@ -317,6 +259,48 @@ class ConsensusModel:
             "score_alt": agg_alt,
         }
         return chosen, info
+
+    # ------------------------------------------------------------------
+    # ETA one_base propagation
+    # ------------------------------------------------------------------
+    def _propagate_one_base_eta(self, fix: FixState, k_star: DecisionKey, v_star: int) -> None:
+        """
+        If case.one_base is enforced and we fix eta[b]=1, then all other eta[b']=0
+        is implied and can be fixed immediately to avoid redundant solves.
+        """
+        if not getattr(self.case, "one_base", False):
+            return
+        group, b = k_star
+        if group != "eta":
+            return
+        if int(v_star) != 1:
+            return
+
+        for b2 in self.case.B:
+            if b2 != b:
+                fix.apply_fix(("eta", b2), 0)
+        print(f"Propagated one_base: fixed eta[{b}]=1 => all other eta=0")
+
+    def _constraint_propagation_from_eta(self, fix: FixState) -> None:
+        """
+        If eta[b]=0, then all gamma_LT[h,b] and gamma_ST[h,b,t] must be 0.
+        This prevents infeasibility when we later try to fix gamma variables
+        for bases that have already been deselected.
+        """
+        for b in self.case.B:
+            eta_key = ("eta", b)
+            if fix.fixed.get(eta_key) == 0:
+                # Base b is deselected; fix all charters in this base to 0
+                for h in self.case.H:
+                    gamma_lt_key = ("gamma_LT", (h, b))
+                    gamma_st_keys = [("gamma_ST", (h, b, t)) for t in self.case.T]
+                    
+                    if gamma_lt_key not in fix.fixed:
+                        fix.apply_fix(gamma_lt_key, 0)
+                    
+                    for gst_key in gamma_st_keys:
+                        if gst_key not in fix.fixed:
+                            fix.apply_fix(gst_key, 0)
 
     # -------------------------
     # Phase A/B loops
@@ -418,27 +402,6 @@ class ConsensusModel:
             aggregator=aggregator,
         )
 
-    def _constraint_propagation_from_eta(self, fix: FixState) -> None:
-        """
-        If eta[b]=0, then all gamma_LT[h,b] and gamma_ST[h,b,t] must be 0.
-        This prevents infeasibility when we later try to fix gamma variables
-        for bases that have already been deselected.
-        """
-        for b in self.case.B:
-            eta_key = ("eta", b)
-            if fix.fixed.get(eta_key) == 0:
-                # Base b is deselected; fix all charters in this base to 0
-                for h in self.case.H:
-                    gamma_lt_key = ("gamma_LT", (h, b))
-                    gamma_st_keys = [("gamma_ST", (h, b, t)) for t in self.case.T]
-                    
-                    if gamma_lt_key not in fix.fixed:
-                        fix.apply_fix(gamma_lt_key, 0)
-                    
-                    for gst_key in gamma_st_keys:
-                        if gst_key not in fix.fixed:
-                            fix.apply_fix(gst_key, 0)
-
     def fix_gamma_lt(
         self,
         fix: FixState,
@@ -518,16 +481,19 @@ class ConsensusModel:
         *,
         mip_gap_master: float = 0.002,
     ):
+        # IMPORTANT: stop pool first so master can use threads freely
+        self.close()
+
         from config.scenario_config import ScenarioConfig
         from optimization_models.optimization_model import OptimizationModel
 
         master_cfg = ScenarioConfig(self.case, scenario_ids=master_scenarios)
         master = OptimizationModel(self.case, master_cfg, master_scenarios)
-        master.setParam("MIPGap", float(mip_gap_master))
-        master.setParam("OutputFlag", 0)
+        master.model.setParam("MIPGap", float(mip_gap_master))
         master.model.setParam("Threads", 0)  # use all cores
         master.model.setParam("TimeLimit", 14400) #max 4 timer master solve
-        master.model.update()
+        master.model.setParam("OutputFlag", 0)
+        master.update()
 
         # Apply persistent state directly on master
         bm = BoundManager(master)
@@ -537,7 +503,7 @@ class ConsensusModel:
         
         if master.model.SolCount == 0:
             raise RuntimeError(f"Master solve: no solution. Status={master.model.Status}")
-        #return master and total time spent on judges and master
+        
         return master
 
     # -------------------------
@@ -551,12 +517,12 @@ class ConsensusModel:
         lt_max_iters: int = 200,
         top_k_eta: int = 1,
         top_k_lt: int = 1,
-        min_p: float = 0.6,
+        min_p: float = 0.60,
         max_p: float = 0.99,
         aggregator: str = "mean",  # consider "median" if objectives noisy
         tighten_ub_st: bool = True,
         unanim_fix_zero_st: bool = True,
-        mip_gap_master: float = 0.002,
+        mip_gap_master: float = 0.02,
     ):
         fix = FixState()
 
@@ -600,49 +566,52 @@ class ConsensusModel:
         return master, self._now()
 
 
-# =====================================================================
-# Example usage (inside your driver/CLI code)
-# =====================================================================
-if __name__ == "__main__":
-    # This block is illustrative; you likely have your own CLI harness.
-    from config.case_config import CaseConfig
-    from scenario_models.price_model import PriceModel
-    from scenario_models.weather_model import WeatherModel
+# # =====================================================================
+# # Example usage (inside your driver/CLI code)
+# # =====================================================================
+# if __name__ == "__main__":
+#     # This block is illustrative; you likely have your own CLI harness.
+#     from config.case_config import CaseConfig
+#     from scenario_models.weather_model import WeatherModel
+#     from scenario_models.price_model import PriceModel
 
-    case_path = "cases/tests/test01.yaml"
-    case = CaseConfig(case_path)
+#     case_path = "cases/tests/test01.yaml"
+#     case = CaseConfig(case_path)
 
-    weather_model = WeatherModel()
-    price_model = PriceModel()
+#     weather_model = WeatherModel()
+#     price_model = PriceModel()
 
-    judge_seeds = [11, 22, 33, 44, 55]          # one scenario per judge
-    master_scenarios = judge_seeds[:]           # or a larger set
+#     judge_seeds = [11, 22, 33, 44, 55]          # one scenario per judge
+#     master_scenarios = judge_seeds[:]           # or a larger set
 
-    cm = ConsensusModel(
-        case,
-        judge_seeds_1scenario_each=judge_seeds,
-        weather_model=weather_model,
-        price_model=price_model,
-        mip_gap_judges=0.01,
-        log=True,
-    )
+#     cm = ConsensusModel(
+#         case,
+#         judge_seeds_1scenario_each=judge_seeds,
+#         weather_model=weather_model,
+#         price_model=price_model,
+#         mip_gap_judges=0.01,
+#         log=True,
+#     )
 
-    master, fix, runtime = cm.optimize(
-        master_scenarios=master_scenarios,
-        eta_max_iters=50,
-        lt_max_iters=200,
-        top_k_eta=1,
-        top_k_lt=1,
-        min_p=0.6,
-        max_p=0.95,
-        aggregator="mean",
-        tighten_ub_st=True,
-        unanim_fix_zero_st=True,
-        mip_gap_master=0.002,
-    )
+#     try :
+#         master, fix, runtime = cm.optimize(
+#         master_scenarios=master_scenarios,
+#         eta_max_iters=50,
+#         lt_max_iters=200,
+#         top_k_eta=1,
+#         top_k_lt=1,
+#         min_p=0.6,
+#         max_p=0.99,
+#         aggregator="mean",
+#         tighten_ub_st=True,
+#         unanim_fix_zero_st=True,
+#         mip_gap_master=0.002,
+#     )
+#     finally:
+#         cm.close()
 
-    print("Master status:", master.model.Status)
-    print("Master obj:", master.model.ObjVal)
-    print("Fixed decisions:", len(fix.fixed))
-    print("UB tightened:", len(fix.ub))
-    print("Runtime:", runtime)
+#     print("Master status:", master.model.Status)
+#     print("Master obj:", master.model.ObjVal)
+#     print("Fixed decisions:", len(fix.fixed))
+#     print("UB tightened:", len(fix.ub))
+#     print("Runtime:", runtime)

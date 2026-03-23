@@ -10,6 +10,7 @@ from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
 from optimization_models.optimization_model import OptimizationModel
 from optimization_models.consensus_model import ConsensusModel
+from optimization_models.consensus_model_multiprocessing import ConsensusModelMP
 
 
 ISS_COLUMNS = [
@@ -166,7 +167,7 @@ def run_iss(args) -> str:
                     case, 
                     scenario_cfg, 
                     judge_seeds_1scenario_each=judge_seeds,
-                    mip_gap_judges=0.2,
+                    mip_gap_judges=0.02,
                     log=False
                 )
                 
@@ -178,6 +179,32 @@ def run_iss(args) -> str:
                     top_k_lt=1,
                     min_p=0.55,
                     max_p=0.95,
+                    aggregator="mean",
+                    tighten_ub_st=True,
+                    unanim_fix_zero_st=True,
+                    mip_gap_master=0.02
+                )
+            elif args.method == "con_mp":
+                judge_seeds = scenario_ids
+                master_scenarios = judge_seeds[:]
+                
+                cm = ConsensusModelMP(
+                    case, 
+                    scenario_cfg, 
+                    judge_seeds_1scenario_each=judge_seeds,
+                    mip_gap_judges=0.02,
+                    cap_workers=14,
+                    log=False
+                )
+                
+                model, runtime = cm.optimize(
+                    master_scenarios=master_scenarios,
+                    eta_max_iters=50,
+                    lt_max_iters=200,
+                    top_k_eta=1,
+                    top_k_lt=1,
+                    min_p=0.60,
+                    max_p=0.99,
                     aggregator="mean",
                     tighten_ub_st=True,
                     unanim_fix_zero_st=True,
@@ -230,7 +257,7 @@ def run_iss(args) -> str:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run ISS and write ISS.csv")
     parser.add_argument("-c", "--case", required=True)
-    parser.add_argument("-m", "--method", default="mip", choices=["mip", "con"])
+    parser.add_argument("-m", "--method", default="mip", choices=["mip", "con", "con_mp"])
     parser.add_argument("-n", "--n_trees", type=int, required=True)
     parser.add_argument("-s", "--scenario_tree_sizes", type=int, nargs="+", required=True)
     parser.add_argument("--seed", type=int, default=99)

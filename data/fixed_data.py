@@ -75,7 +75,7 @@ class FixedData:
             mob_rate=57_500,
             n_teams=4,
             travel_speed=46,
-            max_wave=1.8005,
+            max_wave=1.7005,
             cost_per_km=7.4,
         ),
         VesselType("SOV",
@@ -86,7 +86,7 @@ class FixedData:
             mob_rate=230_000,
             n_teams=12,
             travel_speed=28,
-            max_wave=2.5005,
+            max_wave=2.0005,
             cost_per_km=37.2,
             periodic_return=14,
         )
