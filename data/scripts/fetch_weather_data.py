@@ -1,12 +1,14 @@
 import zipfile
 
-import cdsapi
 import numpy as np
 import pandas as pd
 
 from data.fixed_data import data
 
 def fetch_weather_data():
+     
+    import cdsapi
+
     dataset = "reanalysis-era5-single-levels-timeseries"
     client = cdsapi.Client()
 
