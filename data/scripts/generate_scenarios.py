@@ -1,9 +1,14 @@
+import os 
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 
 from data.fixed_data import data
 from scenario_models.weather_model import WeatherModel
 from scenario_models.price_model import PriceModel 
+
+scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
 def _generate_weather(rng, scenarios):
     
@@ -23,8 +28,8 @@ def _generate_weather(rng, scenarios):
     df = pd.concat(rows, ignore_index=True)
     df = df[["wl_id", "d", "hour", "s", "speed", "height"]]
     
-    df.to_parquet("data/scenario_data/weather.parquet")
-    df.to_csv("data/scenario_data/weather.csv", index=False)
+    df.to_parquet(scenario_data_dir / "weather.parquet")
+    #df.to_csv("data/scenario_data/weather.csv", index=False)
 
 def _generate_prices(rng, scenarios):
     
@@ -33,7 +38,7 @@ def _generate_prices(rng, scenarios):
 
     pm = PriceModel()
     
-    df_weather_sim = pd.read_parquet("data/scenario_data/weather.parquet")
+    df_weather_sim = pd.read_parquet(scenario_data_dir / "weather.parquet")
 
     isos = {w.iso for w in data.wind_farms}
 
@@ -65,8 +70,8 @@ def _generate_prices(rng, scenarios):
     df = pd.concat(rows, ignore_index=True)
     df = df[["iso", "d", "s", "price"]]
 
-    df.to_parquet("data/scenario_data/price.parquet")
-    df.to_csv("data/scenario_data/price.csv", index=False)
+    df.to_parquet(scenario_data_dir / "price.parquet")
+    #df.to_csv("data/scenario_data/price.csv", index=False)
 
 def _generate_failures(rng, scenarios):
 
@@ -96,8 +101,8 @@ def _generate_failures(rng, scenarios):
 
     df = pd.DataFrame(rows)
 
-    df.to_parquet("data/scenario_data/failures.parquet")
-    df.to_csv("data/scenario_data/failures.csv", index=False)
+    df.to_parquet(scenario_data_dir / "failures.parquet")
+    #df.to_csv("data/scenario_data/failures.csv", index=False)
 
 
 
@@ -106,11 +111,11 @@ def generate_scenarios():
     rng = np.random.default_rng(seed=data.generate_scenarios_seed)
     scenarios = [s for s in range(1, data.n_scenarios_to_generate + 1)]
 
-
+    print("Generating weather")
     _generate_weather(rng, scenarios)
-
+    print("Generating prices")
     _generate_prices(rng, scenarios)
-
+    print("Generating failures")
     _generate_failures(rng, scenarios)
 
 

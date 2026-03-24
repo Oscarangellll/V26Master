@@ -1,3 +1,5 @@
+import os 
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -15,8 +17,9 @@ class WeatherModel:
 
     def _fit(self):
         
+        data_dir = Path(os.environ.get("DATA_DIR", "data"))        
         df_weather = pd.read_parquet(
-            "data/weather/weather.parquet"
+            data_dir / "weather/weather.parquet"
         )
 
         for wl_id, df_wl in df_weather.groupby("weather_location_id"):

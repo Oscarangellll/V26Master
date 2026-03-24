@@ -254,7 +254,7 @@ class FixedData:
     work_day_start = 7
     work_day_end = 19
 
-    n_scenarios_to_generate = 300 
+    n_scenarios_to_generate = 4 
     generate_scenarios_seed = 676769 
     
     wind_speed_resolution = 1

@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,10 +15,9 @@ class PriceModel:
 
 
     def _fit(self):
-        
-        df_weather = pd.read_parquet("data/weather/weather.parquet")
-        
-        df_price = pd.read_parquet("data/price/price.parquet")
+        data_dir = Path(os.environ.get("DATA_DIR", "data"))        
+        df_weather = pd.read_parquet(data_dir / "weather/weather.parquet")
+        df_price = pd.read_parquet(data_dir / "price/price.parquet")
 
         for iso, df_price_iso in df_price.groupby("ISO3"):
             weather_location_ids = sorted({

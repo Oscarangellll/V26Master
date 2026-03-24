@@ -1,9 +1,14 @@
+import os
+from pathlib import Path
 import pandas as pd
 
 from data.fixed_data import data
 
 def process_price_data():
-    df = pd.read_csv("data/price/original.csv", parse_dates=["Date"])
+
+    data_dir = Path(os.environ.get("DATA_DIR", "data"))
+
+    df = pd.read_csv(data_dir / "price/original.csv", parse_dates=["Date"])
     
     isos = {w.iso for w in data.wind_farms}
     
@@ -21,5 +26,5 @@ def process_price_data():
     df = df.set_index("Date")
     df.index.name = "date"
 
-    df.to_parquet("data/price/price.parquet")
-    df.to_csv("data/price/price.csv")
+    df.to_parquet(data_dir / "price/price.parquet")
+    #df.to_csv("data/price/price.csv")
