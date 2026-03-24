@@ -258,7 +258,7 @@ class FixedData:
     generate_scenarios_seed = 676769 
     
     wind_speed_resolution = 1
-    wave_height_resolution = 0.1
+    wave_height_resolution = 0.9
 
     work_friction = 0.0
 

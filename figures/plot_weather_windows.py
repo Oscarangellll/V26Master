@@ -36,6 +36,8 @@ def plot_weather_windows():
     working_hours = list(range(data.work_day_start, data.work_day_end))
     df_w = df_w[df_w.index.hour.isin(working_hours)]
     
+    s = rng.integers(1, data.n_scenarios_to_generate)
+
     for vessel_type in data.vessel_types:
         df_ww = (
             df_w.groupby(pd.Grouper(freq="d"))
@@ -47,9 +49,11 @@ def plot_weather_windows():
 
         df_ww_syn = pd.read_parquet(
             "data/scenario_data/weather_windows.parquet",
+            engine="fastparquet",
             filters=[
-                ("wl_id", "==", 3),
-                ("h", "==", vessel_type.name)
+                ("wl_id", "==", wl_id),
+                ("h", "==", vessel_type.name),
+                #("s", "==", s)
             ]
         )
         
@@ -57,6 +61,6 @@ def plot_weather_windows():
         plt.hist(df_ww_syn["ww"], alpha=0.5, label="Synthetic", density=True)
         plt.xlabel("Weather window (hours)")
         plt.ylabel("Density")
-        plt.title(f"Vessel: {vessel_type.name}, loc: {wl_id}")
+        plt.title(f"Vessel: {vessel_type.name}, loc: {wl_id}, scen: {s}")
         plt.legend()
         plt.show()
