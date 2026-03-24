@@ -487,8 +487,7 @@ class ConsensusModelMP:
         from config.scenario_config import ScenarioConfig
         from optimization_models.optimization_model import OptimizationModel
 
-        master_cfg = ScenarioConfig(self.case, scenario_ids=master_scenarios)
-        master = OptimizationModel(self.case, master_cfg, master_scenarios)
+        master = OptimizationModel(self.case, self.scenario, master_scenarios)
         master.model.setParam("MIPGap", float(mip_gap_master))
         master.model.setParam("Threads", 0)  # use all cores
         master.model.setParam("TimeLimit", 14400) #max 4 timer master solve
@@ -564,54 +563,3 @@ class ConsensusModelMP:
         )
 
         return master, self._now()
-
-
-# # =====================================================================
-# # Example usage (inside your driver/CLI code)
-# # =====================================================================
-# if __name__ == "__main__":
-#     # This block is illustrative; you likely have your own CLI harness.
-#     from config.case_config import CaseConfig
-#     from scenario_models.weather_model import WeatherModel
-#     from scenario_models.price_model import PriceModel
-
-#     case_path = "cases/tests/test01.yaml"
-#     case = CaseConfig(case_path)
-
-#     weather_model = WeatherModel()
-#     price_model = PriceModel()
-
-#     judge_seeds = [11, 22, 33, 44, 55]          # one scenario per judge
-#     master_scenarios = judge_seeds[:]           # or a larger set
-
-#     cm = ConsensusModel(
-#         case,
-#         judge_seeds_1scenario_each=judge_seeds,
-#         weather_model=weather_model,
-#         price_model=price_model,
-#         mip_gap_judges=0.01,
-#         log=True,
-#     )
-
-#     try :
-#         master, fix, runtime = cm.optimize(
-#         master_scenarios=master_scenarios,
-#         eta_max_iters=50,
-#         lt_max_iters=200,
-#         top_k_eta=1,
-#         top_k_lt=1,
-#         min_p=0.6,
-#         max_p=0.99,
-#         aggregator="mean",
-#         tighten_ub_st=True,
-#         unanim_fix_zero_st=True,
-#         mip_gap_master=0.002,
-#     )
-#     finally:
-#         cm.close()
-
-#     print("Master status:", master.model.Status)
-#     print("Master obj:", master.model.ObjVal)
-#     print("Fixed decisions:", len(fix.fixed))
-#     print("UB tightened:", len(fix.ub))
-#     print("Runtime:", runtime)

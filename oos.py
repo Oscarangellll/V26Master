@@ -112,8 +112,12 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         "MIPGap": 0.0,
     }
 
+    n = len(oos_scenarios)
     for scenario_id in oos_scenarios:
-        scenario_ids = [int(scenario_id)]
+        scenario_id = int(scenario_id)
+        scenario_ids = [scenario_id]
+        
+        scenario_cfg.weights = {scenario_id: 1.0}
         model = OptimizationModel(case, scenario_cfg, scenario_ids)
         model.Params.OutputFlag = 0
         model.Params.MIPGap = 0.02
@@ -133,13 +137,14 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         totals["runtime"] += model.Runtime
         totals["MIPGap"] += model.MIPGap
 
-    n = len(oos_scenarios)
     return {k: v / n for k, v in totals.items()}
 
 
 def run_oos(args, iss_file: str):
     case = CaseConfig(f"cases/{args.case}.yaml")
     oos_scenarios = list(range(args.oos_pool_start, args.oos_pool_end + 1))
+
+    scenario_cfg = ScenarioConfig(case, oos_scenarios)
 
     iss_df = pd.read_csv(iss_file)
 
@@ -218,7 +223,6 @@ def run_oos(args, iss_file: str):
             if key in eval_cache:
                 result = eval_cache[key]
             else:
-                scenario_cfg = ScenarioConfig(case, oos_scenarios)
                 result = _evaluate_solution(case, solution, oos_scenarios, scenario_cfg)
                 eval_cache[key] = result
 

@@ -54,6 +54,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Append only new OOS rows and reuse previously evaluated solutions",
     )
+    parser.add_argument(
+        "--scenario_reduction",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use k-medoids scenario reduction within each instance pool",
+    )
+    parser.add_argument(
+        "--instance_pool_size",
+        type=int,
+        default=100,
+        help="Number of ISS scenarios per instance",
+    )
 
     parser.add_argument(
         "--iss_output",

@@ -2,12 +2,16 @@ import argparse
 import csv
 import hashlib
 import json
+import os
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from config.case_config import CaseConfig
 from config.scenario_config import ScenarioConfig
+from config.scenario_reduction import perform_scenario_reduction
 from optimization_models.optimization_model import OptimizationModel
 from optimization_models.consensus_model import ConsensusModel
 from optimization_models.consensus_model_multiprocessing import ConsensusModelMP
@@ -26,6 +30,7 @@ ISS_COLUMNS = [
     "travel_cost_S",
     "travel_cost_M",
     "runtime",
+    "MasterSolve_runtime",
     "MIPGap",
     "eta",
     "gamma_LT",
@@ -71,6 +76,120 @@ def _sample_scenarios(rng, iss_pool, tree_sizes, nested):
         size: rng.choice(iss_pool, size=size, replace=False)
         for size in tree_sizes
     }
+
+
+def _instance_pool(instance_id, pool_start, pool_end, pool_size):
+    lo = pool_start + (instance_id - 1) * pool_size
+    hi = lo + pool_size - 1
+    if hi > pool_end:
+        raise ValueError(
+            "Not enough ISS scenarios for requested instances. "
+            f"Instance {instance_id} requires [{lo}, {hi}] but iss_pool_end={pool_end}."
+        )
+    return list(range(lo, hi + 1))
+
+
+def _preload_reduction_inputs(case, all_iss_scenarios):
+    scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
+
+    df_weather_windows = pd.read_parquet(
+        scenario_data_dir / "weather_windows.parquet",
+        filters=[
+            ("wl_id", "in", [w.weather_location_id for w in case.wind_farms]),
+            ("s", "in", all_iss_scenarios),
+            ("h", "in", case.H),
+        ],
+    )
+    weather_windows = defaultdict(dict)
+    for r in df_weather_windows.itertuples():
+        weather_windows[r.s][(r.h, r.wl_id, r.d)] = r.ww
+
+    df_failures = pd.read_parquet(
+        scenario_data_dir / "failures.parquet",
+        filters=[
+            ("w", "in", case.W),
+            ("s", "in", all_iss_scenarios),
+        ],
+    )
+    failures = defaultdict(dict)
+    for r in df_failures.itertuples():
+        failures[r.s][(r.w, r.m, r.d)] = r.failures
+
+    df_downtime = pd.read_parquet(
+        scenario_data_dir / "downtime_cost.parquet",
+        filters=[
+            ("w", "in", case.W),
+            ("s", "in", all_iss_scenarios),
+        ],
+    )
+    downtime_cost = defaultdict(dict)
+    for r in df_downtime.itertuples():
+        downtime_cost[r.s][(r.w, r.d)] = r.downtime_cost
+
+    return weather_windows, failures, downtime_cost
+
+
+def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
+    all_iss_scenarios = list(range(args.iss_pool_start, args.iss_pool_end + 1))
+
+    scenario_ids_by_instance_tree = {}
+    weights_by_instance_tree = {}
+
+    weather_windows = failures = downtime_cost = None
+    if args.scenario_reduction:
+        weather_windows, failures, downtime_cost = _preload_reduction_inputs(
+            case,
+            all_iss_scenarios,
+        )
+
+    for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
+        instance_pool = _instance_pool(
+            instance_id,
+            args.iss_pool_start,
+            args.iss_pool_end,
+            args.instance_pool_size,
+        )
+
+        if args.scenario_reduction:
+            for tree_size in scenario_tree_sizes:
+                reduced_ids, reduced_weights = perform_scenario_reduction(
+                    case,
+                    instance_pool,
+                    weather_windows,
+                    downtime_cost,
+                    failures,
+                    n_reduced_scenarios=tree_size,
+                )
+                scenario_ids_by_instance_tree[(instance_id, tree_size)] = [
+                    int(s) for s in reduced_ids
+                ]
+                weights_by_instance_tree[(instance_id, tree_size)] = {
+                    int(s): float(w) for s, w in reduced_weights.items()
+                }
+        else:
+            sampled = _sample_scenarios(
+                rng,
+                np.array(instance_pool),
+                scenario_tree_sizes,
+                args.nested_trees,
+            )
+            for tree_size in scenario_tree_sizes:
+                selected_ids = [int(s) for s in sampled[tree_size]]
+                scenario_ids_by_instance_tree[(instance_id, tree_size)] = selected_ids
+                print(f"selected_ids for instance {instance_id} tree size {tree_size}: {selected_ids}")
+                weights_by_instance_tree[(instance_id, tree_size)] = {
+                    int(s): 1.0 / len(selected_ids) for s in selected_ids
+                }
+
+    complete_scenario_pool = sorted(
+        {
+            s
+            for ids in scenario_ids_by_instance_tree.values()
+            for s in ids
+        }
+    )
+
+    return scenario_ids_by_instance_tree, weights_by_instance_tree, complete_scenario_pool
 
 
 def _param_signature(args, case):
@@ -120,7 +239,6 @@ def run_iss(args) -> str:
     rng = np.random.default_rng(seed=args.seed)
 
     scenario_tree_sizes = sorted(args.scenario_tree_sizes)
-    iss_pool = np.arange(args.iss_pool_start, args.iss_pool_end + 1)
 
     param_signature = _param_signature(args, case)
 
@@ -142,18 +260,23 @@ def run_iss(args) -> str:
 
     var_groups = ["eta", "gamma_LT", "gamma_ST", "alpha"]
 
-    for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
-        sampled = _sample_scenarios(
-            rng,
-            iss_pool,
-            scenario_tree_sizes,
-            args.nested_trees,
-        )
+    scenario_ids_plan, scenario_weights_plan, complete_scenario_pool = _prepare_iss_plan(
+        args,
+        case,
+        rng,
+        start_instance_id,
+        scenario_tree_sizes,
+    )
+    scenario_cfg = ScenarioConfig(
+        case,
+        complete_scenario_pool,
+    )
 
+    for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
         for tree_size in scenario_tree_sizes:
-            scenario_ids = [int(s) for s in sampled[tree_size]]
-            scenario_cfg = ScenarioConfig(case, scenario_ids)
-            #####
+            scenario_ids = scenario_ids_plan[(instance_id, tree_size)]
+            scenario_cfg.weights = scenario_weights_plan[(instance_id, tree_size)]
+
             if args.method == "mip":
                 model = OptimizationModel(case, scenario_cfg, scenario_ids)
                 model.Params.OutputFlag = 0
@@ -234,6 +357,7 @@ def run_iss(args) -> str:
                 model.travel_cost_S.getValue(),
                 model.travel_cost_M.getValue(),
                 model.Runtime if args.method == "mip" else runtime,
+                model.Runtime if not args.method == "mip" else None,
                 model.MIPGap,
                 _encode_solution_group(solution, "eta"),
                 _encode_solution_group(solution, "gamma_LT"),
@@ -242,7 +366,7 @@ def run_iss(args) -> str:
                 _encode_scenarios(scenario_ids),
                 param_signature,
                 args.seed,
-                f"{args.iss_pool_start}-{args.iss_pool_end}",
+                f"{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[0]}-{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[-1]}",
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
                 int(args.nested_trees),
             ]
@@ -252,7 +376,6 @@ def run_iss(args) -> str:
                 writer.writerow(row)
 
     return str(output_path)
-
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run ISS and write ISS.csv")
@@ -265,6 +388,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iss_pool_end", type=int, default=50)
     parser.add_argument("--oos_pool_start", type=int, default=51)
     parser.add_argument("--oos_pool_end", type=int, default=300)
+    parser.add_argument(
+        "--scenario_reduction",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use k-medoids scenario reduction within each instance pool",
+    )
+    parser.add_argument(
+        "--instance_pool_size",
+        type=int,
+        default=100,
+        help="Number of ISS scenarios per instance",
+    )
     parser.add_argument(
         "--nested_trees",
         action=argparse.BooleanOptionalAction,

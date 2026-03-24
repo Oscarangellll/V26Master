@@ -7,6 +7,7 @@ class OptimizationModel:
         self.case = case
         self.scenario = scenario
         self.scenario_ids = scenario_ids
+        weights = scenario.weights
 
         model = gp.Model()
         
@@ -215,28 +216,28 @@ class OptimizationModel:
 
         # Second-stage objective
         downtime_cost = gp.quicksum(
-            C_D[s][w, d] * b[w, m, d, s]
+            weights[s] * C_D[s][w, d] * b[w, m, d, s]
             for w in W 
             for m in M 
             for d in D
             for s in S
-        ) / len(S)
+        )
         travel_cost_S = gp.quicksum(
-            C_RT[h, b, w] * x[h, b, w, d, s] 
+            weights[s] * C_RT[h, b, w] * x[h, b, w, d, s] 
             for h in H_S
             for b in B
             for w in W
             for d in D
             for s in S
-        ) / len(S)
+        )
         travel_cost_M = gp.quicksum(
-            C_T[h, i, j] * f[v, i, j, d, s] 
+            weights[s] * C_T[h, i, j] * f[v, i, j, d, s] 
             for h in H_M 
             for v in V[h] 
             for i in L for j in L if i != j 
             for d in D
             for s in S
-        ) / len(S)
+        )
         second_obj = downtime_cost + travel_cost_S + travel_cost_M
 
         # Second stage constraints
@@ -438,6 +439,7 @@ class OptimizationModel:
         model.setObjective(first_obj + second_obj)
 
         self.model = model
+        self.weights = weights
 
         self.gamma_ST = gamma_ST
         self.gamma_LT = gamma_LT

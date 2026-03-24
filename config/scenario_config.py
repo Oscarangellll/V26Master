@@ -6,6 +6,9 @@ import pandas as pd
 
 class ScenarioConfig:
     def __init__(self, case, scenario_ids):
+        scenario_ids = sorted(int(s) for s in scenario_ids)
+        if len(scenario_ids) == 0:
+            raise ValueError("ScenarioConfig requires at least one scenario id")
         
         scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
@@ -20,9 +23,9 @@ class ScenarioConfig:
                 ("s", "in", scenario_ids)
             ]
         )
-        self.K_S = defaultdict(dict)
+        K_S = defaultdict(dict)
         for r in df_K_S.itertuples():
-            self.K_S[r.s][(r.h, r.b, r.w, r.d)] = r.patterns
+            K_S[r.s][(r.h, r.b, r.w, r.d)] = r.patterns
         
         df_K_M = pd.read_parquet(
             scenario_data_dir / "multiday_pattern_set.parquet",
@@ -32,9 +35,9 @@ class ScenarioConfig:
                 ("s", "in", scenario_ids)
             ]
         )
-        self.K_M = defaultdict(dict)
+        K_M = defaultdict(dict)
         for r in df_K_M.itertuples():
-            self.K_M[r.s][(r.h, r.w, r.d)] = r.patterns
+            K_M[r.s][(r.h, r.w, r.d)] = r.patterns
             
         # Second stage parameters
         df_P = pd.read_parquet(scenario_data_dir / "patterns.parquet")
@@ -47,9 +50,9 @@ class ScenarioConfig:
                 ("s", "in", scenario_ids)
             ]
         )
-        self.F = defaultdict(dict)
+        F = defaultdict(dict)
         for r in df_F.itertuples():
-            self.F[r.s][(r.w, r.m, r.d)] = r.failures 
+            F[r.s][(r.w, r.m, r.d)] = r.failures 
 
         df_C_D = pd.read_parquet(
             scenario_data_dir / "downtime_cost.parquet", 
@@ -58,10 +61,11 @@ class ScenarioConfig:
                 ("s", "in", scenario_ids)
             ]
         )
-        self.C_D = defaultdict(dict)
+        C_D = defaultdict(dict)
         for r in df_C_D.itertuples():
-            self.C_D[r.s][(r.w, r.d)] = r.downtime_cost
-
-
-
-
+            C_D[r.s][(r.w, r.d)] = r.downtime_cost
+        
+        self.K_S = K_S
+        self.K_M = K_M
+        self.F = F
+        self.C_D = C_D
