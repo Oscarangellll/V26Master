@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from typing import Any, Dict, List, Tuple, Optional
 
@@ -122,21 +123,12 @@ class JudgePool:
         self.cap_workers = int(cap_workers)
         self.mp_start_method = mp_start_method
 
-        self._ctx = mp.get_context(self.mp_start_method) #returns a context object for multiprocessing with the specified start method
         self._pools: List[mp.pool.Pool] = []
         self._started = False
 
     def start(self):
         if self._started:
             return
-
-        # We want exactly one process per judge seed, but maybe cap by cores.
-        # Strategy: If judges > workers, we can still do it with fewer pools by batching,
-        # BUT best is 1 worker per judge to reuse the built model.
-        # Therefore: cap should be >= max judges you actually run per job, or accept batching.
-        # Here we do: one pool per judge (lightweight) is NOT good.
-        # Better: one pool with N processes, but then each process must know which judge it is.
-        # Easiest: create N processes == len(judge_seeds) if feasible.
 
         n_j = len(self.judge_seeds)
         n_workers = pick_workers(n_j, cap=self.cap_workers)
@@ -148,17 +140,21 @@ class JudgePool:
                 f"Increase cap_workers or reduce judges per run."
             )
 
-        # Single pool with n_j workers; initializer differs per worker is tricky.
-        # So we build one pool PER JUDGE? No. Instead: build n_j pools of 1 process each (still ok up to 20).
-        # With 20 judges, 20 pools is fine; overhead is small compared to MIP solves.
-
-        for judge_seed in self.judge_seeds:
-            pool = self._ctx.Pool( 
+        # Create pools in parallel using ThreadPoolExecutor for faster startup
+        def _create_pool_for_judge(judge_seed):
+            """Helper to create a Pool for one judge (runs in thread)"""
+            ctx = mp.get_context(self.mp_start_method)
+            pool = ctx.Pool(
                 processes=1,
-                initializer=_init_worker, 
+                initializer=_init_worker,
                 initargs=(self.case, self.scenario, judge_seed, self.mip_gap_judges),
             )
-            self._pools.append(pool)
+            return pool
+
+        # Spawn pool creation in parallel (threads are cheap, only spawning/init is expensive)
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = [executor.submit(_create_pool_for_judge, seed) for seed in self.judge_seeds]
+            self._pools = [f.result() for f in futures]
 
         self._started = True
 
