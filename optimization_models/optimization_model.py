@@ -30,7 +30,7 @@ class OptimizationModel:
         # First stage variables
         gamma_ST = model.addVars(H, B, T, vtype=gp.GRB.INTEGER)
         gamma_LT = model.addVars(H, B, vtype=gp.GRB.INTEGER)
-        sigma = model.addVars(H, T, vtype=gp.GRB.INTEGER)
+        sigma_ST = model.addVars(H, T, vtype=gp.GRB.INTEGER)
         
         alpha = model.addVars(
             ((v, b, t)
@@ -45,10 +45,14 @@ class OptimizationModel:
 
         # First stage objective
         
+        base_cost = gp.quicksum(
+            C_B[b] * eta[b]
+            for b in B
+        )
+        
         charter_cost_mob = gp.quicksum(
-            C_mob[h] * sigma[h, t]
+            C_mob[h] * (gp.quicksum(sigma_ST[h, t] for t in T) + gp.quicksum(gamma_LT[h, b] for b in B))
             for h in H
-            for t in T
         )
         
         charter_cost_ST = gp.quicksum(
@@ -62,10 +66,7 @@ class OptimizationModel:
             for h in H
             for b in B
         )
-        base_cost = gp.quicksum(
-            C_B[b] * eta[b]
-            for b in B
-        )
+        
         first_obj = base_cost + charter_cost_mob + charter_cost_ST + charter_cost_LT
 
         # First stage constraints
@@ -101,20 +102,20 @@ class OptimizationModel:
         )
         
         model.addConstrs(
-            (sigma[h, "Jan"] == gp.quicksum(gamma_ST[h, b, "Jan"] + gamma_LT[h, b] for b in B)
-            for h in H),
-            name="mobilization_Jan"
-        )
-        
-        model.addConstrs(
-            (sigma[h, T[t]] >= gp.quicksum(gamma_ST[h, b, T[t]] - gamma_ST[h, b, T[t-1]] for b in B)
+            (sigma_ST[h, T[t]] >= gp.quicksum(gamma_ST[h, b, T[t]] - gamma_ST[h, b, T[t-1]] for b in B)
             for h in H
             for t in range(1, len(T))),
             name="mobilization_other_months",
         )
         
         model.addConstrs(
-            (sigma[h, t] >= 0
+            (sigma_ST[h, "Jan"] >= gp.quicksum(gamma_ST[h, b, "Jan"] - gamma_ST[h, b, "Dec"] for b in B)
+            for h in H),
+            name="mobilization_circular"
+        )
+        
+        model.addConstrs(
+            (sigma_ST[h, t] >= 0
             for h in H
             for t in T),
             name="mobilization_nonnegativity"
@@ -339,11 +340,11 @@ class OptimizationModel:
         )
 
         model.addConstrs(
-            (b[w, m, 0, s] == 0
+            (b[w, m, 0, s] == b[w, m, D[-1], s]
             for w in W
             for m in M
             for s in S),
-            name="init_backlog"
+            name="circular_backlog"
         )
 
         model.addConstrs(
@@ -443,7 +444,7 @@ class OptimizationModel:
 
         self.gamma_ST = gamma_ST
         self.gamma_LT = gamma_LT
-        self.sigma = sigma
+        self.sigma = sigma_ST
         self.alpha = alpha
         self.eta = eta
 
