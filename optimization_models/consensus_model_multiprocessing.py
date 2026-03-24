@@ -79,8 +79,9 @@ class ConsensusModelMP:
             cap_workers=cap_workers,
             mp_start_method="spawn"
         )
+        print("før start")
         self.pool.start()
-
+        print("etter start")
         # NOT Per-judge cache: judge -> { CacheKey -> JudgeSolveResult }
         self._solve_cache: Dict[CacheKey, Dict[Tuple[int], JudgeSolveResult]] = {}
 
