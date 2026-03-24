@@ -272,6 +272,7 @@ def run_iss(args) -> str:
         case,
         complete_scenario_pool,
     )
+    print(f"Complete scenario pool for ISS: {complete_scenario_pool}")
 
     for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
         for tree_size in scenario_tree_sizes:
@@ -311,15 +312,16 @@ def run_iss(args) -> str:
             elif args.method == "con_mp":
                 judge_seeds = scenario_ids
                 master_scenarios = judge_seeds[:]
-                
+                print(f"Preparing ConsensusModelMP with master_scenarios={master_scenarios}...")
                 cm = ConsensusModelMP(
                     case, 
                     scenario_cfg, 
                     judge_seeds_1scenario_each=judge_seeds,
                     mip_gap_judges=0.02,
                     cap_workers=14,
-                    log=False
+                    log=True
                 )
+                print(f"Running ConsensusModelMP with master_scenarios={master_scenarios}...")
                 
                 model, runtime = cm.optimize(
                     master_scenarios=master_scenarios,
@@ -334,6 +336,7 @@ def run_iss(args) -> str:
                     unanim_fix_zero_st=True,
                     mip_gap_master=0.02
                 )
+                print(f"ConsensusModelMP completed with runtime={runtime} seconds.")
                 
             else:
                 raise ValueError(f"Unsupported method: {args.method}")
