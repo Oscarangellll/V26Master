@@ -159,6 +159,7 @@ def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
                     downtime_cost,
                     failures,
                     n_reduced_scenarios=tree_size,
+                    features_setting=args.features_setting,
                 )
                 scenario_ids_by_instance_tree[(instance_id, tree_size)] = [
                     int(s) for s in reduced_ids
@@ -412,6 +413,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--iss_output", default=None)
     parser.add_argument("--oos_output", default=None)
+    #add parser for features: should have int between 1 and 3 (1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures)
+    parser.add_argument(
+        "--features_setting",
+        type=int,
+        choices=[1, 2, 3],
+        default=1,
+        help="Features to use for scenario reduction: 1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures",
+    )
     return parser
 
 

@@ -77,7 +77,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional OOS output path (default: results/stability/<case>/<method>/OSS.csv)",
     )
-
+    parser.add_argument(
+        "--features_setting",
+        type=int,
+        choices=[1, 2, 3],
+        default=1,
+        help="Features to use for scenario reduction: 1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures",
+    )
     return parser
 
 
