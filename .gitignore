@@ -1,6 +1,5 @@
 .DS_store
 .venv/
-setup_env
 __pycache__/
 **__pycache__/
 data/scenario_data
