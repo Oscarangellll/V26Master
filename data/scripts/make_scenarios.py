@@ -1,4 +1,6 @@
 import itertools
+import os
+from pathlib import Path
 
 from haversine import haversine, Unit
 import numpy as np
@@ -6,12 +8,14 @@ import pandas as pd
 
 from data.fixed_data import data
 
+scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
+
 def _make_downtime_cost():
 
     # Downtime cost
     # | w | d | s | downtime_cost |
 
-    df_w = pd.read_parquet("data/scenario_data/weather.parquet")
+    df_w = pd.read_parquet(scenario_data_dir / "weather.parquet")
     df_w["power"] = data.power_curve(df_w["speed"])
 
     rows = []
@@ -27,14 +31,14 @@ def _make_downtime_cost():
 
     df_w = pd.concat(rows, ignore_index=True)
 
-    df_p = pd.read_parquet("data/scenario_data/price.parquet")
+    df_p = pd.read_parquet(scenario_data_dir / "price.parquet")
 
     df = df_w.merge(df_p, on=["iso", "d", "s"])
     df["downtime_cost"] = df["power"] * 24 * df["price"]
     df = df[["w", "d", "s", "downtime_cost"]]
 
-    df.to_parquet("data/scenario_data/downtime_cost.parquet")
-    df.to_csv("data/scenario_data/downtime_cost.csv", index=False)
+    df.to_parquet(scenario_data_dir / "downtime_cost.parquet")
+    #df.to_csv("data/scenario_data/downtime_cost.csv", index=False)
 
 
 def _make_weather_windows():
@@ -42,7 +46,7 @@ def _make_weather_windows():
     # Weather window
     # | h | wl_id | d | s | ww |
     
-    df = pd.read_parquet("data/scenario_data/weather.parquet")
+    df = pd.read_parquet(scenario_data_dir / "weather.parquet")
 
     working_hours = list(range(data.work_day_start, data.work_day_end))
     df = df[df["hour"].isin(working_hours)]
@@ -74,8 +78,8 @@ def _make_weather_windows():
             })
 
     df = pd.DataFrame(rows)
-    df.to_parquet("data/scenario_data/weather_windows.parquet")
-    df.to_csv("data/scenario_data/weather_windows.csv", index=False)
+    df.to_parquet(scenario_data_dir / "weather_windows.parquet")
+    #df.to_csv("data/scenario_data/weather_windows.csv", index=False)
 
 
 def _make_patterns():
@@ -113,8 +117,8 @@ def _make_patterns():
         k += 1
     
     df = pd.DataFrame(rows)
-    df.to_parquet("data/scenario_data/patterns.parquet")
-    df.to_csv("data/scenario_data/patterns.csv", index=False)
+    df.to_parquet(scenario_data_dir / "patterns.parquet")
+    #df.to_csv("data/scenario_data/patterns.csv", index=False)
 
 def _make_pattern_sets():
     
@@ -145,7 +149,7 @@ def _make_pattern_sets():
     # K_M
     # | h | w | d | s | list(k) |
 
-    df_pattern = pd.read_parquet("data/scenario_data/patterns.parquet")
+    df_pattern = pd.read_parquet(scenario_data_dir / "patterns.parquet")
     
     pattern_vectors = (
         df_pattern
@@ -179,7 +183,7 @@ def _make_pattern_sets():
         for w in data.wind_farms
     }
     
-    df_ww = pd.read_parquet("data/scenario_data/weather_windows.parquet")
+    df_ww = pd.read_parquet(scenario_data_dir / "weather_windows.parquet")
     days = df_ww["d"].unique()
     scenarios = df_ww["s"].unique()
     
@@ -241,21 +245,21 @@ def _make_pattern_sets():
                             })
     
     df_K_S = pd.DataFrame(rows_K_S)
-    df_K_S.to_parquet("data/scenario_data/singleday_pattern_set.parquet")
-    df_K_S.to_csv("data/scenario_data/singleday_pattern_set.csv", index=False)
+    df_K_S.to_parquet(scenario_data_dir / "singleday_pattern_set.parquet")
+    #df_K_S.to_csv("data/scenario_data/singleday_pattern_set.csv", index=False)
     
     df_K_M = pd.DataFrame(rows_K_M)
-    df_K_M.to_parquet("data/scenario_data/multiday_pattern_set.parquet")
-    df_K_M.to_csv("data/scenario_data/multiday_pattern_set.csv", index=False)
+    df_K_M.to_parquet(scenario_data_dir / "multiday_pattern_set.parquet")
+    #df_K_M.to_csv("data/scenario_data/multiday_pattern_set.csv", index=False)
 
 def make_scenarios():
-    
+    print("Making costs") 
     _make_downtime_cost()
-
+    print("Making WW")
     _make_weather_windows()
-    
+    print("Makgin patterns")
     _make_patterns()
-    
+    print("Making pattern sets")
     _make_pattern_sets()
 
 
