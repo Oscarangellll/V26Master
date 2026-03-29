@@ -55,6 +55,7 @@ class MaintenanceCategory:
     failure_rate: float # per year
     duration: float # in hours
     vessel_types: list[str]
+    scale: int
 
 class PowerCurve:
     def __init__(self):
@@ -217,22 +218,26 @@ class FixedData:
         MaintenanceCategory("Manual Reset",
             failure_rate=7.5,
             duration=3,
-            vessel_types=["CTV", "SOV"]
+            vessel_types=["CTV", "SOV"],
+            scale=1
         ),
         MaintenanceCategory("Minor Repair",
-            failure_rate=6,
+            failure_rate=3,
             duration=3.75,
-            vessel_types=["CTV", "SOV"]
+            vessel_types=["CTV", "SOV"],
+            scale=2
         ),
         MaintenanceCategory("Medium Repair",
-            failure_rate= 1.375,
+            failure_rate= 0.275,
             duration=4.4,
-            vessel_types=["CTV", "SOV"]
+            vessel_types=["CTV", "SOV"],
+            scale=5
         ),
         MaintenanceCategory("Major Repair",
-            failure_rate=0.24,
+            failure_rate=0.04,
             duration=4.33,
-            vessel_types=["CTV", "SOV"]
+            vessel_types=["CTV", "SOV"],
+            scale=6
         ),
     ]
     
@@ -254,7 +259,7 @@ class FixedData:
     work_day_start = 7
     work_day_end = 19
 
-    n_scenarios_to_generate = 300 
+    n_scenarios_to_generate = 4000 
     generate_scenarios_seed = 676769 
     
     wind_speed_resolution = 1

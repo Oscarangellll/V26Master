@@ -91,7 +91,7 @@ def _generate_failures(rng, scenarios):
                         "m": m.name,
                         "d": d + 1,
                         "s": s,
-                        "failures": draws[s_idx, d, m_idx]
+                        "failures": m.scale * draws[s_idx, d, m_idx]
                     })
 
     df = pd.DataFrame(rows)
