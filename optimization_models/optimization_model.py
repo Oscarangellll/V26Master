@@ -2,12 +2,12 @@
 import gurobipy as gp
 
 class OptimizationModel:
-    def __init__(self, case, scenario, scenario_ids):
+    def __init__(self, case, scenario, scenario_ids, weights):
         
         self.case = case
         self.scenario = scenario
         self.scenario_ids = scenario_ids
-        weights = {s: 1/len(scenario_ids) for s in scenario_ids} 
+        self.weights = weights
 
         model = gp.Model()
         
