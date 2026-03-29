@@ -2,11 +2,9 @@ import os
 from pathlib import Path
 
 import pandas as pd
-import numpy as np
 
 from data.fixed_data import data
-from scenario_models.weather_model import WeatherModel
-from scenario_models.price_model import PriceModel 
+from scenario_models import PriceModel, WeatherModel
 
 scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
@@ -17,19 +15,23 @@ def _generate_weather(rng, scenarios):
 
     wm = WeatherModel()
 
-    rows = []
-    for wl in data.weather_locations:
-        for s in scenarios:
+    for s in scenarios:
+
+        rows = []
+        for wl in data.weather_locations:
 
             df = wm.simulate(wl.id, rng)
             df["s"] = s
             rows.append(df)
 
-    df = pd.concat(rows, ignore_index=True)
-    df = df[["wl_id", "d", "hour", "s", "speed", "height"]]
-    
-    df.to_parquet(scenario_data_dir / "weather.parquet")
-    #df.to_csv("data/scenario_data/weather.csv", index=False)
+        df = pd.concat(rows, ignore_index=True)
+        df.to_parquet(
+            scenario_data_dir / "weather",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
+
 
 def _generate_prices(rng, scenarios):
     
@@ -38,19 +40,21 @@ def _generate_prices(rng, scenarios):
 
     pm = PriceModel()
     
-    df_weather_sim = pd.read_parquet(scenario_data_dir / "weather.parquet")
-
     isos = {w.iso for w in data.wind_farms}
 
-    rows = []
-    for iso in isos:
-        wl_ids = sorted(
-            {w.weather_location_id for w in data.wind_farms if w.iso == iso}
+    for s in scenarios:
+        df_weather_sim = pd.read_parquet(
+            scenario_data_dir / "weather",
+            filters=[("s", "==", s)]
         )
-        for s in scenarios:
-            df_iso = df_weather_sim[
-                (df_weather_sim["wl_id"].isin(wl_ids)) & (df_weather_sim["s"] == s)
-            ]
+        
+        rows = []
+        for iso in isos:
+            wl_ids = sorted(
+                {w.weather_location_id for w in data.wind_farms if w.iso == iso}
+            )
+            
+            df_iso = df_weather_sim[df_weather_sim["wl_id"].isin(wl_ids)]
             
             df_iso = (
                 df_iso.groupby(["wl_id", "d"])["speed"]
@@ -65,13 +69,17 @@ def _generate_prices(rng, scenarios):
             
             df = pm.simulate(speed, iso, rng)
             df["s"] = s
+            
             rows.append(df)
 
-    df = pd.concat(rows, ignore_index=True)
-    df = df[["iso", "d", "s", "price"]]
-
-    df.to_parquet(scenario_data_dir / "price.parquet")
-    #df.to_csv("data/scenario_data/price.csv", index=False)
+        df = pd.concat(rows, ignore_index=True)
+        df.to_parquet(
+            scenario_data_dir / "price",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
+            
 
 def _generate_failures(rng, scenarios):
 
@@ -81,14 +89,15 @@ def _generate_failures(rng, scenarios):
     p = [m.failure_rate / 365 for m in data.maintenance_categories]
     p.append(1 - sum(p))
 
-    rows = []
-    for w in data.wind_farms:
-        draws = rng.multinomial(    
-            w.n_turbines,
-            p,
-            size=(len(scenarios), data.days_per_period * len(data.periods))
-        )
-        for s_idx, s in enumerate(scenarios):
+    for s in scenarios:
+
+        rows = []
+        for w in data.wind_farms:
+            draws = rng.multinomial(    
+                w.n_turbines,
+                p,
+                size=(data.days_per_period * len(data.periods))
+            )
             for d in range(data.days_per_period * len(data.periods)):
                 for m_idx, m in enumerate(data.maintenance_categories):
                     rows.append({
@@ -96,25 +105,26 @@ def _generate_failures(rng, scenarios):
                         "m": m.name,
                         "d": d + 1,
                         "s": s,
-                        "failures": m.scale * draws[s_idx, d, m_idx]
+                        "failures": m.scale * draws[d, m_idx]
                     })
 
-    df = pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        df.to_parquet(
+            scenario_data_dir / "failures",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
 
-    df.to_parquet(scenario_data_dir / "failures.parquet")
-    #df.to_csv("data/scenario_data/failures.csv", index=False)
 
-
-
-def generate_scenarios():
+def generate_scenarios(rng, scenarios):
     
-    rng = np.random.default_rng(seed=data.generate_scenarios_seed)
-    scenarios = [s for s in range(1, data.n_scenarios_to_generate + 1)]
-
     print("Generating weather")
     _generate_weather(rng, scenarios)
+
     print("Generating prices")
     _generate_prices(rng, scenarios)
+
     print("Generating failures")
     _generate_failures(rng, scenarios)
 

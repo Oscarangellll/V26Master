@@ -82,7 +82,7 @@ class WeatherModel:
         month_of_sim = np.repeat(months, 24 * data.days_per_period)
 
         T, K = len(month_of_sim), 2
-
+        
         init_state = rng.choice(model["init_states"], p=model["init_probs"])
         
         sim_states = np.empty(T, dtype=int)

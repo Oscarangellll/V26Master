@@ -246,7 +246,7 @@ class FixedData:
     price_from_year = 2023
     price_to_year = 2025
     
-    days_per_period = 30
+    days_per_period = 30 
     
     periods = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
@@ -263,7 +263,7 @@ class FixedData:
     generate_scenarios_seed = 676769 
     
     wind_speed_resolution = 1
-    wave_height_resolution = 0.9
+    wave_height_resolution = 0.1
 
     work_friction = 0.0
 

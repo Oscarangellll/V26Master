@@ -7,7 +7,7 @@ class OptimizationModel:
         self.case = case
         self.scenario = scenario
         self.scenario_ids = scenario_ids
-        weights = scenario.weights
+        weights = {s: 1/len(scenario_ids) for s in scenario_ids} 
 
         model = gp.Model()
         

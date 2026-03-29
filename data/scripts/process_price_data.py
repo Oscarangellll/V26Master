@@ -27,4 +27,4 @@ def process_price_data():
     df.index.name = "date"
 
     df.to_parquet(data_dir / "price/price.parquet")
-    #df.to_csv("data/price/price.csv")
+    df.to_csv("data/price/price.csv")

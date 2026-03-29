@@ -10,76 +10,98 @@ from data.fixed_data import data
 
 scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
-def _make_downtime_cost():
+def _make_downtime_cost(scenarios):
 
     # Downtime cost
     # | w | d | s | downtime_cost |
-
-    df_w = pd.read_parquet(scenario_data_dir / "weather.parquet")
-    df_w["power"] = data.power_curve(df_w["speed"])
-
-    rows = []
-
-    for w in data.wind_farms:
-        df = df_w[df_w["wl_id"] == w.weather_location_id].copy()
     
-        df = df.groupby(["d", "s"])["power"].mean().reset_index()
-        df["w"] = w.name
-        df["iso"] = w.iso
+    for s in scenarios:
+        
+        df_w = pd.read_parquet(
+            scenario_data_dir / "weather",
+            filters=[("s", "==", s)]
+        )
+        df_w["power"] = data.power_curve(df_w["speed"])
+
+        rows = []
+
+        for w in data.wind_farms:
+            df = df_w[df_w["wl_id"] == w.weather_location_id].copy()
+            
+            df = df.groupby(["d"])["power"].mean().reset_index()
+            df["s"] = s 
+            df["w"] = w.name
+            df["iso"] = w.iso
     
-        rows.append(df)
+            rows.append(df)
 
-    df_w = pd.concat(rows, ignore_index=True)
+        df_w = pd.concat(rows, ignore_index=True)
 
-    df_p = pd.read_parquet(scenario_data_dir / "price.parquet")
+        df_p = pd.read_parquet( 
+            scenario_data_dir / "price",
+            filters=[("s", "==", s)]
+        )
 
-    df = df_w.merge(df_p, on=["iso", "d", "s"])
-    df["downtime_cost"] = df["power"] * 24 * df["price"]
-    df = df[["w", "d", "s", "downtime_cost"]]
+        df = df_w.merge(df_p, on=["iso", "d", "s"])
+        df["downtime_cost"] = df["power"] * 24 * df["price"]
+        df = df[["w", "d", "s", "downtime_cost"]]
+        
+        df.to_parquet(
+            scenario_data_dir / "downtime_cost",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
 
-    df.to_parquet(scenario_data_dir / "downtime_cost.parquet")
-    #df.to_csv("data/scenario_data/downtime_cost.csv", index=False)
 
-
-def _make_weather_windows():
+def _make_weather_windows(scenarios):
     
     # Weather window
     # | h | wl_id | d | s | ww |
     
-    df = pd.read_parquet(scenario_data_dir / "weather.parquet")
 
     working_hours = list(range(data.work_day_start, data.work_day_end))
-    df = df[df["hour"].isin(working_hours)]
+    
+    for s in scenarios:
+        df = pd.read_parquet(   
+            scenario_data_dir / "weather",
+            filters=[("s", "==", s)]
+        )
+        df = df[df["hour"].isin(working_hours)]
+        
+        rows = []
+        for h in data.vessel_types:
+            max_height = h.max_wave
 
-    rows = []
-    for h in data.vessel_types:
-        max_height = h.max_wave
+            for (wl_id, d), group in df.groupby(["wl_id", "d"]):
+                feasible = (
+                    group["height"] <= max_height
+                ).to_numpy().astype(int)
 
-        for (s, wl_id, d), group in df.groupby(["s", "wl_id", "d"]):
-            feasible = (
-                group["height"] <= max_height
-            ).to_numpy().astype(int)
+                max_len = 0
+                current_len = 0
+                for val in feasible:
+                    if val:
+                        current_len += 1
+                        max_len = max(max_len, current_len)
+                    else:
+                        current_len = 0
 
-            max_len = 0
-            current_len = 0
-            for val in feasible:
-                if val:
-                    current_len += 1
-                    max_len = max(max_len, current_len)
-                else:
-                    current_len = 0
+                rows.append({
+                    "h": h.name,
+                    "wl_id": wl_id,
+                    "d": d,
+                    "s": s,
+                    "ww": max_len,
+                })
 
-            rows.append({
-                "h": h.name,
-                "wl_id": wl_id,
-                "d": d,
-                "s": s,
-                "ww": max_len,
-            })
-
-    df = pd.DataFrame(rows)
-    df.to_parquet(scenario_data_dir / "weather_windows.parquet")
-    #df.to_csv("data/scenario_data/weather_windows.csv", index=False)
+        df = pd.DataFrame(rows)
+        df.to_parquet(
+            scenario_data_dir / "weather_windows",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
 
 
 def _make_patterns():
@@ -120,7 +142,7 @@ def _make_patterns():
     df.to_parquet(scenario_data_dir / "patterns.parquet")
     #df.to_csv("data/scenario_data/patterns.csv", index=False)
 
-def _make_pattern_sets():
+def _make_pattern_sets(scenarios):
     
     def remove_dominated(pattern_idxs, vectors):
         kept = []
@@ -183,25 +205,27 @@ def _make_pattern_sets():
         for w in data.wind_farms
     }
     
-    df_ww = pd.read_parquet(scenario_data_dir / "weather_windows.parquet")
-    days = df_ww["d"].unique()
-    scenarios = df_ww["s"].unique()
+    for s in scenarios:
+        df_ww = pd.read_parquet(
+            scenario_data_dir / "weather_windows",
+            filters=[("s", "==", s)]
+        )
+        days = df_ww["d"].unique()
     
-    weather_window = (
-        df_ww
-        .set_index(["h", "wl_id", "d", "s"])["ww"]
-        .to_dict()
-    )
+        weather_window = (
+            df_ww
+            .set_index(["h", "wl_id", "d", "s"])["ww"]
+            .to_dict()
+        )
     
-    rows_K_S = []
-    rows_K_M = []
+        rows_K_S = []
+        rows_K_M = []
     
-    for h in data.vessel_types:
-        for w in data.wind_farms:
-            wl_id = w.weather_location_id
+        for h in data.vessel_types:
+            for w in data.wind_farms:
+                wl_id = w.weather_location_id
 
-            for d in days:
-                for s in scenarios:
+                for d in days:
                     ww = weather_window[(h.name, wl_id, d, s)]
                     frik = 1 + data.work_friction
                     
@@ -243,24 +267,36 @@ def _make_pattern_sets():
                                 "s": s,
                                 "patterns": feasible_patterns
                             })
-    
-    df_K_S = pd.DataFrame(rows_K_S)
-    df_K_S.to_parquet(scenario_data_dir / "singleday_pattern_set.parquet")
-    #df_K_S.to_csv("data/scenario_data/singleday_pattern_set.csv", index=False)
-    
-    df_K_M = pd.DataFrame(rows_K_M)
-    df_K_M.to_parquet(scenario_data_dir / "multiday_pattern_set.parquet")
-    #df_K_M.to_csv("data/scenario_data/multiday_pattern_set.csv", index=False)
+        
+        df_K_S = pd.DataFrame(rows_K_S)
+        df_K_S.to_parquet(
+            scenario_data_dir / "singleday_pattern_set",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        )
 
-def make_scenarios():
+        df_K_M = pd.DataFrame(rows_K_M)
+        df_K_M.to_parquet(
+            scenario_data_dir / "multiday_pattern_set",
+            partition_cols=["s"],
+            basename_template="part-{i}",
+            existing_data_behavior="overwrite_or_ignore"
+        ) 
+
+def make_scenarios(scenarios):
+
     print("Making costs") 
-    _make_downtime_cost()
+    _make_downtime_cost(scenarios)
+
     print("Making WW")
-    _make_weather_windows()
+    _make_weather_windows(scenarios)
+
     print("Makgin patterns")
     _make_patterns()
+
     print("Making pattern sets")
-    _make_pattern_sets()
+    _make_pattern_sets(scenarios)
 
 
 
