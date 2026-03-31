@@ -35,9 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--seed", type=int, default=99, help="Random seed")
     parser.add_argument("--iss_pool_start", type=int, default=1)
-    parser.add_argument("--iss_pool_end", type=int, default=50)
-    parser.add_argument("--oos_pool_start", type=int, default=51)
-    parser.add_argument("--oos_pool_end", type=int, default=300)
+    parser.add_argument("--iss_pool_end", type=int, default=3000)
+    parser.add_argument("--oos_pool_start", type=int, default=3001)
+    parser.add_argument("--oos_pool_end", type=int, default=4000)
     parser.add_argument(
         "--gap_prune_threshold",
         type=float,
@@ -66,12 +66,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=100,
         help="Number of ISS scenarios per instance",
-    )
-    parser.add_argument(
-        "--nested_trees",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use nested scenario trees when sampling ISS scenarios.",
     )
 
     parser.add_argument(
@@ -103,4 +97,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import multiprocessing as mp
+    mp.set_start_method("spawn")
+    
     main()
