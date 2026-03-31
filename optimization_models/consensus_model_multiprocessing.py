@@ -140,6 +140,10 @@ class ConsensusModelMP:
         self.bounds = {}
 
         self.t0 = time.perf_counter()
+        self.time_to_fix_eta = None 
+        self.time_to_fix_gamma_LT = None
+        self.time_to_tighten_gamma_ST = None
+
         self.fix_and_bounds_time_limit = 10 #18_000
         self.master_model_time_limit = 3_600
 
@@ -162,15 +166,18 @@ class ConsensusModelMP:
                     )
                )
                 self.judges[s].start()
-            
+
             self.fix_eta()
-            self.time_to_fix_eta = time.perf_counter() - self.t0
+            t1 = time.perf_counter()
+            self.time_to_fix_eta = t1 - self.t0
 
             self.fix_gamma_LT()
-            self.time_to_fix_gamma_LT = time.perf_counter() - self.time_to_fix_eta 
-            
+            t2 = time.perf_counter()
+            self.time_to_fix_gamma_LT = t2 - t1
+
             self.tighten_gamma_ST()
-            self.time_to_tighten_gamma_ST = time.perf_counter() - self.time_to_fix_gamma_LT
+            t3 = time.perf_counter()
+            self.time_to_tighten_gamma_ST = t3 - t2            
 
         except TimeoutError:
             self._shutdown_judges()
@@ -182,7 +189,6 @@ class ConsensusModelMP:
         finally:
             signal.alarm(0)
         
-        print("begin")
         # Solve master with fixations and bounds
         scenario_cfg = ScenarioConfig(self.case, self.scenario_ids)
         master_model = OptimizationModel(self.case, scenario_cfg, self.scenario_ids, self.weights)
@@ -199,7 +205,6 @@ class ConsensusModelMP:
         master_model.Params.OutputFlag = 0
         master_model.Params.MIPGap = 0.02
         master_model.Params.TimeLimit = self.master_model_time_limit
-        print("end")
         
         master_model.optimize()
 

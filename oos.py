@@ -5,9 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from config.case_config import CaseConfig
-from config.scenario_config import ScenarioConfig
-from optimization_models.optimization_model import OptimizationModel
+from config import CaseConfig, ScenarioConfig
+from optimization_models import OptimizationModel
 
 
 OSS_COLUMNS = [
@@ -33,7 +32,6 @@ OSS_COLUMNS = [
     "seed",
     "iss_pool",
     "oos_pool",
-    "nested_trees",
     "iss_file",
 ]
 
@@ -117,8 +115,8 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         scenario_id = int(scenario_id)
         scenario_ids = [scenario_id]
         
-        scenario_cfg.weights = {scenario_id: 1.0}
-        model = OptimizationModel(case, scenario_cfg, scenario_ids)
+        weights = {scenario_id: 1.0}
+        model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
         model.Params.OutputFlag = 0
         model.Params.MIPGap = 0.02
 
@@ -250,7 +248,6 @@ def run_oos(args, iss_file: str):
                 int(meta.seed),
                 meta.iss_pool,
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
-                int(meta.nested_trees),
                 str(iss_file),
             ]
 

@@ -14,8 +14,8 @@ def build_parser() -> argparse.ArgumentParser:
         "-m",
         "--method",
         default="mip",
-        choices=["mip", "con", "con_mp"],
-        help="Solution method (currently only mip is supported)",
+        choices=["mip", "con_mp"],
+        help="Solution method",
     )
     parser.add_argument(
         "-n",
@@ -38,12 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iss_pool_end", type=int, default=50)
     parser.add_argument("--oos_pool_start", type=int, default=51)
     parser.add_argument("--oos_pool_end", type=int, default=300)
-    parser.add_argument(
-        "--nested_trees",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use nested ISS trees inside each replication",
-    )
+    
     parser.add_argument(
         "--append",
         action="store_true",

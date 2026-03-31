@@ -3,18 +3,14 @@ import csv
 import hashlib
 import json
 import os
-from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from config.case_config import CaseConfig
-from config.scenario_config import ScenarioConfig
+from config import CaseConfig, ScenarioConfig
 from config.scenario_reduction import perform_scenario_reduction
-from optimization_models.optimization_model import OptimizationModel
-from optimization_models.consensus_model import ConsensusModel
-from optimization_models.consensus_model_multiprocessing import ConsensusModelMP
+from optimization_models import OptimizationModel, ConsensusModelMP
 
 
 ISS_COLUMNS = [
@@ -29,8 +25,12 @@ ISS_COLUMNS = [
     "downtime_cost",
     "travel_cost_S",
     "travel_cost_M",
-    "runtime",
-    "MasterSolve_runtime",
+    "MIP_runtime",
+    "Con_total runtime",
+    "Con_eta runtime", 
+    "Con_gamma_LT_runtime", 
+    "Con_gamma_ST_runtime",
+    "Con_Master_runtime",
     "MIPGap",
     "eta",
     "gamma_LT",
@@ -41,7 +41,6 @@ ISS_COLUMNS = [
     "seed",
     "iss_pool",
     "oos_pool",
-    "nested_trees",
 ]
 
 
@@ -67,16 +66,11 @@ def _encode_scenarios(scenarios):
     return ";".join(map(str, sorted(int(s) for s in scenarios)))
 
 
-def _sample_scenarios(rng, iss_pool, tree_sizes, nested):
-    if nested:
-        draw = rng.choice(iss_pool, size=max(tree_sizes), replace=False)
-        return {size: draw[:size] for size in tree_sizes}
-
+def _sample_scenarios(rng, iss_pool, tree_sizes):
     return {
         size: rng.choice(iss_pool, size=size, replace=False)
         for size in tree_sizes
     }
-
 
 def _instance_pool(instance_id, pool_start, pool_end, pool_size):
     lo = pool_start + (instance_id - 1) * pool_size
@@ -93,7 +87,7 @@ def _preload_reduction_inputs(case, all_iss_scenarios):
     scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
     df_weather_windows = pd.read_parquet(
-        scenario_data_dir / "weather_windows.parquet",
+        scenario_data_dir / "weather_windows",
         filters=[
             ("wl_id", "in", [w.weather_location_id for w in case.wind_farms]),
             ("s", "in", all_iss_scenarios),
@@ -105,7 +99,7 @@ def _preload_reduction_inputs(case, all_iss_scenarios):
         weather_windows[r.s][(r.h, r.wl_id, r.d)] = r.ww
 
     df_failures = pd.read_parquet(
-        scenario_data_dir / "failures.parquet",
+        scenario_data_dir / "failures",
         filters=[
             ("w", "in", case.W),
             ("s", "in", all_iss_scenarios),
@@ -116,7 +110,7 @@ def _preload_reduction_inputs(case, all_iss_scenarios):
         failures[r.s][(r.w, r.m, r.d)] = r.failures
 
     df_downtime = pd.read_parquet(
-        scenario_data_dir / "downtime_cost.parquet",
+        scenario_data_dir / "downtime_cost",
         filters=[
             ("w", "in", case.W),
             ("s", "in", all_iss_scenarios),
@@ -172,7 +166,6 @@ def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
                 rng,
                 np.array(instance_pool),
                 scenario_tree_sizes,
-                args.nested_trees,
             )
             for tree_size in scenario_tree_sizes:
                 selected_ids = [int(s) for s in sampled[tree_size]]
@@ -268,86 +261,32 @@ def run_iss(args) -> str:
         start_instance_id,
         scenario_tree_sizes,
     )
-    scenario_cfg = ScenarioConfig(
-        case,
-        complete_scenario_pool,
-    )
-    print(f"Complete scenario pool for ISS: {complete_scenario_pool}")
 
     for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
         for tree_size in scenario_tree_sizes:
             scenario_ids = scenario_ids_plan[(instance_id, tree_size)]
-            scenario_cfg.weights = scenario_weights_plan[(instance_id, tree_size)]
+            weights = scenario_weights_plan[(instance_id, tree_size)]
 
             if args.method == "mip":
-                model = OptimizationModel(case, scenario_cfg, scenario_ids)
+                scenario_cfg = ScenarioConfig(case, scenario_ids)
+                model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
                 model.Params.OutputFlag = 0
                 model.Params.MIPGap = 0.02
                 model.optimize()
-            elif args.method == "con":
-                judge_seeds = scenario_ids
-                master_scenarios = judge_seeds[:]
-                
-                cm = ConsensusModel(
-                    case, 
-                    scenario_cfg, 
-                    judge_seeds_1scenario_each=judge_seeds,
-                    mip_gap_judges=0.02,
-                    log=False
-                )
-                
-                model, runtime = cm.optimize(
-                    master_scenarios=master_scenarios,
-                    eta_max_iters=50,
-                    lt_max_iters=200,
-                    top_k_eta=1,
-                    top_k_lt=1,
-                    min_p=0.55,
-                    max_p=0.95,
-                    aggregator="mean",
-                    tighten_ub_st=True,
-                    unanim_fix_zero_st=True,
-                    mip_gap_master=0.02
-                )
+
             elif args.method == "con_mp":
-                judge_seeds = scenario_ids
-                master_scenarios = judge_seeds[:]
-                print(f"Preparing ConsensusModelMP with master_scenarios={master_scenarios}...")
-                cm = ConsensusModelMP(
-                    case, 
-                    scenario_cfg, 
-                    judge_seeds_1scenario_each=judge_seeds,
-                    mip_gap_judges=0.02,
-                    cap_workers=14,
-                    log=True
-                )
-                print(f"Running ConsensusModelMP with master_scenarios={master_scenarios}...")
-                
-                model, runtime = cm.optimize(
-                    master_scenarios=master_scenarios,
-                    eta_max_iters=50,
-                    lt_max_iters=200,
-                    top_k_eta=1,
-                    top_k_lt=1,
-                    min_p=0.60,
-                    max_p=0.99,
-                    aggregator="mean",
-                    tighten_ub_st=True,
-                    unanim_fix_zero_st=True,
-                    mip_gap_master=0.02
-                )
-                print(f"ConsensusModelMP completed with runtime={runtime} seconds.")
-                
+                model = ConsensusModelMP(case, scenario_ids, weights)
+                model.optimize()
+
             else:
                 raise ValueError(f"Unsupported method: {args.method}")
             
-
             solution = frozenset(
-                ((group, key), int(var.X))
+                ((group, idx), int(var.X))
                 for group in var_groups
-                for key, var in getattr(model, group).items()
+                for idx, var in getattr(model, group).items()
             )
-
+            
             row = [
                 instance_id,
                 tree_size,
@@ -360,8 +299,12 @@ def run_iss(args) -> str:
                 model.downtime_cost.getValue(),
                 model.travel_cost_S.getValue(),
                 model.travel_cost_M.getValue(),
-                model.Runtime if args.method == "mip" else runtime,
-                model.Runtime if not args.method == "mip" else None,
+                model.Runtime if args.method == "mip" else None,
+                model.total_consensus_time if args.method == "con_mp" else None,
+                model.time_to_fix_eta if args.method == "con_mp" else None,
+                model.time_to_fix_gamma_LT if args.method == "con_mp" else None,
+                model.time_to_tighten_gamma_ST if args.method == "con_mp" else None,
+                model.Runtime if args.method == "con_mp" else None,
                 model.MIPGap,
                 _encode_solution_group(solution, "eta"),
                 _encode_solution_group(solution, "gamma_LT"),
@@ -372,7 +315,6 @@ def run_iss(args) -> str:
                 args.seed,
                 f"{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[0]}-{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[-1]}",
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
-                int(args.nested_trees),
             ]
 
             with output_path.open("a", newline="", encoding="utf-8") as f:
