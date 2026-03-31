@@ -1,7 +1,9 @@
 import argparse
+from collections import defaultdict
 import csv
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 
@@ -31,6 +33,22 @@ ISS_COLUMNS = [
     "Con_gamma_LT_runtime", 
     "Con_gamma_ST_runtime",
     "Con_Master_runtime",
+    "Con_eta_n_iters",
+    "Con_eta_vars_fixed",
+    "Con_eta_judges_solved_min",
+    "Con_eta_gap_p90_max",
+    "Con_eta_unanimous_count",
+    "Con_gamma_LT_n_iters",
+    "Con_gamma_LT_vars_fixed",
+    "Con_gamma_LT_judges_solved_min",
+    "Con_gamma_LT_gap_p90_max",
+    "Con_gamma_LT_unanimous_count",
+    "Con_gamma_ST_n_iters",
+    "Con_gamma_ST_vars_fixed",
+    "Con_gamma_ST_judges_solved_min",
+    "Con_gamma_ST_gap_p90_max",
+    "Con_gamma_ST_unanimous_count",
+    "Con_fix_history_json",
     "MIPGap",
     "eta",
     "gamma_LT",
@@ -42,6 +60,56 @@ ISS_COLUMNS = [
     "iss_pool",
     "oos_pool",
 ]
+
+
+def _summarize_con_mp_insights(model):
+    iteration_rows = getattr(model, "fix_iteration_summaries", None)
+    if not iteration_rows:
+        return {}, {}
+
+    by_group = {}
+    for row in iteration_rows:
+        group = row.get("group")
+        if group not in by_group:
+            by_group[group] = []
+        by_group[group].append(row)
+
+    group_summaries = {}
+    for group, rows in by_group.items():
+        n_iters = len(rows)
+        vars_fixed = sum(r.get("fixed_this_iter", 0) for r in rows)
+        judges_solved_vals = [r.get("n_judges_solved") for r in rows if r.get("n_judges_solved") is not None]
+        judges_solved_min = min(judges_solved_vals) if judges_solved_vals else None
+        gap_p90_vals = [r.get("judge_gap_p90") for r in rows if r.get("judge_gap_p90") is not None]
+        gap_p90_max = max(gap_p90_vals) if gap_p90_vals else None
+        unanimous_count = sum(1 for r in rows if r.get("unanimous"))
+
+        group_summaries[group] = {
+            "n_iters": n_iters,
+            "vars_fixed": vars_fixed,
+            "judges_solved_min": judges_solved_min,
+            "gap_p90_max": gap_p90_max,
+            "unanimous_count": unanimous_count,
+        }
+
+    compact_history = {
+        group: [
+            {
+                "iter": r.get("iteration"),
+                "solved": r.get("n_judges_solved"),
+                "failed": r.get("n_judges_failed"),
+                "gap_p90": round(r.get("judge_gap_p90")) if r.get("judge_gap_p90") is not None else None,
+                "cache_hr": round(r.get("cache_hit_rate") * 100) if r.get("cache_hit_rate") is not None else None,
+                "fixed": r.get("fixed_this_iter"),
+                "unan": r.get("unanimous"),
+                "key": r.get("critical_key")[:20] if r.get("critical_key") else None,
+            }
+            for r in by_group.get(group, [])
+        ]
+        for group in sorted(by_group.keys())
+    }
+
+    return group_summaries, compact_history
 
 
 def _encode_key(key):
@@ -233,6 +301,8 @@ def run_iss(args) -> str:
     rng = np.random.default_rng(seed=args.seed)
 
     scenario_tree_sizes = sorted(args.scenario_tree_sizes)
+    gap_prune_threshold = float(getattr(args, "gap_prune_threshold", 0.10))
+    max_allowed_tree_size = max(scenario_tree_sizes)
 
     param_signature = _param_signature(args, case)
 
@@ -264,6 +334,9 @@ def run_iss(args) -> str:
 
     for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
         for tree_size in scenario_tree_sizes:
+            if tree_size > max_allowed_tree_size:
+                continue
+
             scenario_ids = scenario_ids_plan[(instance_id, tree_size)]
             weights = scenario_weights_plan[(instance_id, tree_size)]
 
@@ -271,6 +344,7 @@ def run_iss(args) -> str:
                 scenario_cfg = ScenarioConfig(case, scenario_ids)
                 model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
                 model.Params.OutputFlag = 0
+                model.Params.Timelimit = 900 
                 model.Params.MIPGap = 0.02
                 model.optimize()
 
@@ -280,32 +354,71 @@ def run_iss(args) -> str:
 
             else:
                 raise ValueError(f"Unsupported method: {args.method}")
-            
-            solution = frozenset(
-                ((group, idx), int(var.X))
-                for group in var_groups
-                for idx, var in getattr(model, group).items()
+
+            has_solution = bool(getattr(model, "SolCount", 0) > 0)
+            if has_solution:
+                solution = frozenset(
+                    ((group, idx), int(var.X))
+                    for group in var_groups
+                    for idx, var in getattr(model, group).items()
+                )
+            else:
+                solution = frozenset()
+                print(
+                    "[ISS warning] "
+                    f"No incumbent found for instance={instance_id}, tree_size={tree_size}, method={args.method}, "
+                    f"status={getattr(model, 'Status', None)}."
+                )
+
+            try:
+                gap = float(model.MIPGap)
+            except Exception:
+                gap = float("nan")
+
+            (
+                group_summaries,
+                compact_history,
+            ) = (
+                _summarize_con_mp_insights(model)
+                if args.method == "con_mp"
+                else ({}, {})
             )
             
             row = [
                 instance_id,
                 tree_size,
-                model.ObjVal,
-                model.first_obj.getValue(),
-                model.second_obj.getValue(),
-                model.charter_cost_ST.getValue(),
-                model.charter_cost_LT.getValue(),
-                model.charter_cost_mob.getValue(),
-                model.downtime_cost.getValue(),
-                model.travel_cost_S.getValue(),
-                model.travel_cost_M.getValue(),
+                model.ObjVal if has_solution else None,
+                model.first_obj.getValue() if has_solution else None,
+                model.second_obj.getValue() if has_solution else None,
+                model.charter_cost_ST.getValue() if has_solution else None,
+                model.charter_cost_LT.getValue() if has_solution else None,
+                model.charter_cost_mob.getValue() if has_solution else None,
+                model.downtime_cost.getValue() if has_solution else None,
+                model.travel_cost_S.getValue() if has_solution else None,
+                model.travel_cost_M.getValue() if has_solution else None,
                 model.Runtime if args.method == "mip" else None,
                 model.total_consensus_time if args.method == "con_mp" else None,
                 model.time_to_fix_eta if args.method == "con_mp" else None,
                 model.time_to_fix_gamma_LT if args.method == "con_mp" else None,
                 model.time_to_tighten_gamma_ST if args.method == "con_mp" else None,
                 model.Runtime if args.method == "con_mp" else None,
-                model.MIPGap,
+                group_summaries.get("eta", {}).get("n_iters") if group_summaries else None,
+                group_summaries.get("eta", {}).get("vars_fixed") if group_summaries else None,
+                group_summaries.get("eta", {}).get("judges_solved_min") if group_summaries else None,
+                group_summaries.get("eta", {}).get("gap_p90_max") if group_summaries else None,
+                group_summaries.get("eta", {}).get("unanimous_count") if group_summaries else None,
+                group_summaries.get("gamma_LT", {}).get("n_iters") if group_summaries else None,
+                group_summaries.get("gamma_LT", {}).get("vars_fixed") if group_summaries else None,
+                group_summaries.get("gamma_LT", {}).get("judges_solved_min") if group_summaries else None,
+                group_summaries.get("gamma_LT", {}).get("gap_p90_max") if group_summaries else None,
+                group_summaries.get("gamma_LT", {}).get("unanimous_count") if group_summaries else None,
+                group_summaries.get("gamma_ST", {}).get("n_iters") if group_summaries else None,
+                group_summaries.get("gamma_ST", {}).get("vars_fixed") if group_summaries else None,
+                group_summaries.get("gamma_ST", {}).get("judges_solved_min") if group_summaries else None,
+                group_summaries.get("gamma_ST", {}).get("gap_p90_max") if group_summaries else None,
+                group_summaries.get("gamma_ST", {}).get("unanimous_count") if group_summaries else None,
+                json.dumps(compact_history, separators=(",", ":")) if compact_history else None,
+                gap,
                 _encode_solution_group(solution, "eta"),
                 _encode_solution_group(solution, "gamma_LT"),
                 _encode_solution_group(solution, "gamma_ST"),
@@ -321,6 +434,15 @@ def run_iss(args) -> str:
                 writer = csv.writer(f)
                 writer.writerow(row)
 
+            gap_bad = (not math.isfinite(gap)) or gap > gap_prune_threshold
+            if gap_bad and tree_size < max_allowed_tree_size:
+                max_allowed_tree_size = tree_size
+                print(
+                    "[ISS pruning] "
+                    f"instance={instance_id}, tree_size={tree_size}, gap={gap} > {gap_prune_threshold}. "
+                    f"Skipping larger tree sizes (> {max_allowed_tree_size}) for this and future instances."
+                )
+
     return str(output_path)
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -334,6 +456,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iss_pool_end", type=int, default=50)
     parser.add_argument("--oos_pool_start", type=int, default=51)
     parser.add_argument("--oos_pool_end", type=int, default=300)
+    parser.add_argument(
+        "--gap_prune_threshold",
+        type=float,
+        default=0.10,
+        help="Skip larger scenario tree sizes when an evaluated size exceeds this MIPGap threshold.",
+    )
     parser.add_argument(
         "--scenario_reduction",
         action=argparse.BooleanOptionalAction,
@@ -349,7 +477,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nested_trees",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
     )
     parser.add_argument(
         "--append",

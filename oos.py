@@ -110,7 +110,7 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         "MIPGap": 0.0,
     }
 
-    n = len(oos_scenarios)
+    solved_count = 0
     for scenario_id in oos_scenarios:
         scenario_id = int(scenario_id)
         scenario_ids = [scenario_id]
@@ -123,6 +123,11 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         _fix_solution(model, solution)
         model.optimize()
 
+        if getattr(model, "SolCount", 0) <= 0:
+            print(f"[OOS warning] No incumbent for scenario={scenario_id}, status={getattr(model, 'Status', None)}")
+            continue
+
+        solved_count += 1
         totals["objective"] += model.ObjVal
         totals["first_stage_cost"] += model.first_obj.getValue()
         totals["second_stage_cost"] += model.second_obj.getValue()
@@ -135,7 +140,10 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
         totals["runtime"] += model.Runtime
         totals["MIPGap"] += model.MIPGap
 
-    return {k: v / n for k, v in totals.items()}
+    if solved_count == 0:
+        return {k: None for k in totals}
+
+    return {k: v / solved_count for k, v in totals.items()}
 
 
 def run_oos(args, iss_file: str):
@@ -198,6 +206,12 @@ def run_oos(args, iss_file: str):
 
         for row in rows:
             solution = _decode_solution(row._asdict())
+            
+            # Skip rows with empty solutions (no incumbent found in ISS)
+            if len(solution) == 0:
+                print(f"[OOS skip] Skipping empty solution from tree_size={tree_size}, instance={row.instance_id}")
+                continue
+            
             sol_to_instances[solution].append(int(row.instance_id))
             sol_meta[solution] = row
 

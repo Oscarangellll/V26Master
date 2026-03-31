@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
+import math
 import multiprocessing as mp
 import signal
 import time 
@@ -25,7 +26,7 @@ def _judge(s, case, results_queue, fix_queue, sem):
             fix.apply_to(model)
 
             model.optimize()
-           
+        
             if model.SolCount > 0:
                 solution = {
                     (group, idx): int(var.X) 
@@ -51,10 +52,10 @@ def _judge(s, case, results_queue, fix_queue, sem):
 
         fix_queue.task_done()
 
-DecisionKey = (str, any) # (group, index), identifies a variable
+DecisionKey = tuple[str, object] # (group, index), identifies a variable
 
 class FixExperiment:
-    def __init__(self, fixed: {DecisionKey: int}):
+    def __init__(self, fixed: dict[DecisionKey, int]):
         self.fixed = fixed.copy()
 
     def extended(self, key: DecisionKey, val: int):
@@ -90,9 +91,9 @@ class FixExperiment:
 
 class FixState:
     def __init__(self):
-        self.fixed: {DecisionKey: int} = {}
+        self.fixed: dict[DecisionKey, int] = {}
         
-        self.cache: {(int, FixExperiment): JudgeSolveResult} = {} 
+        self.cache: dict[tuple[int, FixExperiment], JudgeSolveResult] = {}
     
     # Checks if a fix is in cache, and in addition insert the fix
     # in the cache if there is a consistent solution
@@ -143,15 +144,36 @@ class ConsensusModelMP:
         self.time_to_fix_eta = None 
         self.time_to_fix_gamma_LT = None
         self.time_to_tighten_gamma_ST = None
+        self.fix_iteration_summaries = []
 
-        self.fix_and_bounds_time_limit = 10 #18_000
-        self.master_model_time_limit = 3_600
+        self.fix_and_bounds_time_limit = 600 #18_000
+        self.master_model_time_limit = 300 #3_600
+
+    @staticmethod
+    def _safe_float(value):
+        try:
+            parsed = float(value)
+        except Exception:
+            return None
+        if not math.isfinite(parsed):
+            return None
+        return parsed
+
+    @staticmethod
+    def _percentile(values, percentile):
+        if not values:
+            return None
+        sorted_vals = sorted(values)
+        idx = max(0, min(len(sorted_vals) - 1, math.ceil(percentile * len(sorted_vals)) - 1))
+        return float(sorted_vals[idx])
 
     def optimize(self):
         def _alarm_handler(signum, frame):
             raise TimeoutError
-        signal.signal(signal.SIGALRM, _alarm_handler) 
-        signal.alarm(self.fix_and_bounds_time_limit)
+        use_sigalrm = hasattr(signal, "SIGALRM")
+        if use_sigalrm:
+            signal.signal(signal.SIGALRM, _alarm_handler)
+            signal.alarm(self.fix_and_bounds_time_limit)
         
         try:
             for s in self.scenario_ids:
@@ -164,7 +186,7 @@ class ConsensusModelMP:
                         self.fix_queues[s],
                         self.sem
                     )
-               )
+            )
                 self.judges[s].start()
 
             self.fix_eta()
@@ -177,7 +199,7 @@ class ConsensusModelMP:
 
             self.tighten_gamma_ST()
             t3 = time.perf_counter()
-            self.time_to_tighten_gamma_ST = t3 - t2            
+            self.time_to_tighten_gamma_ST = t3 - t2
 
         except TimeoutError:
             self._shutdown_judges()
@@ -187,7 +209,8 @@ class ConsensusModelMP:
         else:
             self._shutdown_judges()
         finally:
-            signal.alarm(0)
+            if use_sigalrm:
+                signal.alarm(0)
         
         # Solve master with fixations and bounds
         scenario_cfg = ScenarioConfig(self.case, self.scenario_ids)
@@ -235,7 +258,7 @@ class ConsensusModelMP:
             for b in self.case.B
             for t in self.case.T
         }
-       
+    
         # Solve all judges with the most recent fix
 
         to_solve = []
@@ -246,6 +269,7 @@ class ConsensusModelMP:
                 self.fix_queues[s].put(fix)
                 to_solve.append(s)
 
+        # Wait for judges
         # Wait for judges
         for s in to_solve:
             self.fix_queues[s].join()
@@ -274,50 +298,105 @@ class ConsensusModelMP:
                 self.bounds[key] = (min(vals), max(vals))
         
     def fix(self, group: str, keys: set[DecisionKey]):
-        
+        iter_idx = 0
+
         # Remove keys when they become fixed. Loop exits when all keys are fixed
         while keys:
+            iter_idx += 1
             fix = FixExperiment(self.state.fixed)
-                    
+
             stats = VoteStats(self.scenario_ids)
             to_solve = []
+            n_judges_total = len(self.scenario_ids)
+            n_judges_solved = 0
+            n_judges_failed = 0
+            cache_hits = 0
+            judge_gaps = []
+            judge_runtimes = []
+            keys_remaining_start = len(keys)
+            fixed_before = len(self.state.fixed)
 
             # Cache or queue
             for s in self.scenario_ids:
                 if self.state.in_cache(s, fix):
+                    cache_hits += 1
                     res = self.state.cache[(s, fix)]
-                    stats.add_from_judge(res) 
+                    if res is None:
+                        n_judges_failed += 1
+                    else:
+                        n_judges_solved += 1
+                        stats.add_from_judge(res)
+                        gap = self._safe_float(res.gap)
+                        runtime = self._safe_float(res.runtime)
+                        if gap is not None:
+                            judge_gaps.append(gap)
+                        if runtime is not None:
+                            judge_runtimes.append(runtime)
                 else:
                     self.fix_queues[s].put(fix)
                     to_solve.append(s)
-                    
+            
+            if to_solve:
+                start_wait = time.perf_counter()
             # Wait for judges
             for s in to_solve:
                 self.fix_queues[s].join()
 
+            if to_solve:
+                elapsed = time.perf_counter() - start_wait
+
             # Collect results
             for _ in to_solve:
                 s, fix, res = self.results_queue.get()
-                        
+
                 # If a judge does not produce a solution,
                 # do not consider its vote
                 if res is None:
+                    n_judges_failed += 1
                     continue
-                        
+
+                n_judges_solved += 1
                 self.state.cache[s, fix] = res
                 stats.add_from_judge(res)
+                gap = self._safe_float(res.gap)
+                runtime = self._safe_float(res.runtime)
+                if gap is not None:
+                    judge_gaps.append(gap)
+                if runtime is not None:
+                    judge_runtimes.append(runtime)
 
             stats.calculate_stats()
-            
+
             critical_key = stats.pick_critical_from(group=group, fix=self.state) 
-            
+
             # All remaining keys is unanimous 
             if critical_key is None:
                 for key in keys:
                     if stats.maj.get(key) is not None:
                         self.state.fixed[key] = stats.maj[key]
+
+                self.fix_iteration_summaries.append(
+                    {
+                        "group": group,
+                        "iteration": iter_idx,
+                        "n_judges_total": n_judges_total,
+                        "n_judges_solved": n_judges_solved,
+                        "n_judges_failed": n_judges_failed,
+                        "cache_hits": cache_hits,
+                        "cache_hit_rate": cache_hits / n_judges_total if n_judges_total else None,
+                        "judge_gap_median": self._percentile(judge_gaps, 0.50),
+                        "judge_gap_p90": self._percentile(judge_gaps, 0.90),
+                        "judge_runtime_median": self._percentile(judge_runtimes, 0.50),
+                        "judge_runtime_p90": self._percentile(judge_runtimes, 0.90),
+                        "keys_remaining_start": keys_remaining_start,
+                        "keys_remaining_end": 0,
+                        "fixed_this_iter": len(self.state.fixed) - fixed_before,
+                        "unanimous": True,
+                        "critical_key": None,
+                    }
+                )
                 return
-            
+
             # Otherwise test maj vs sec fix
             fix_maj = fix.extended(critical_key, stats.maj[critical_key]) 
             fix_sec = fix.extended(critical_key, stats.sec[critical_key]) 
@@ -337,9 +416,15 @@ class ConsensusModelMP:
                     self.fix_queues[s].put(fix_sec)
                     to_solve.append((s, fix_sec))
             
+            if to_solve:
+                start_maj_sec = time.perf_counter()
             # Wait for judges
-            for s in {s for (s, _) in to_solve}:
+            judges_to_wait = {s for (s, _) in to_solve}
+            for s in judges_to_wait:
                 self.fix_queues[s].join()
+
+            if to_solve:
+                elapsed = time.perf_counter() - start_maj_sec
 
             # Collect results
             for _ in to_solve:
@@ -350,13 +435,45 @@ class ConsensusModelMP:
                     res_sec[s] = res 
 
             # check if weighted average obj of maj or sec is bigger
-            obj_maj = sum(r.objective * self.weights[s] for s, r in res_maj.items())
-            obj_sec = sum(r.objective * self.weights[s] for s, r in res_sec.items())
+            has_maj = any(r is not None for r in res_maj.values())
+            has_sec = any(r is not None for r in res_sec.values())
+            obj_maj = sum(r.objective * self.weights[s] for s, r in res_maj.items() if r is not None)
+            obj_sec = sum(r.objective * self.weights[s] for s, r in res_sec.items() if r is not None)
 
-            val = stats.maj[critical_key] if obj_maj < obj_sec else stats.sec[critical_key]
+            if has_maj and not has_sec:
+                val = stats.maj[critical_key]
+            elif has_sec and not has_maj:
+                val = stats.sec[critical_key]
+            elif not has_maj and not has_sec:
+                val = stats.maj[critical_key]
+            else:
+                val = stats.maj[critical_key] if obj_maj < obj_sec else stats.sec[critical_key]
             
             self.state.fixed[critical_key] = val
             keys.remove(critical_key)
+
+            self.fix_iteration_summaries.append(
+                {
+                    "group": group,
+                    "iteration": iter_idx,
+                    "n_judges_total": n_judges_total,
+                    "n_judges_solved": n_judges_solved,
+                    "n_judges_failed": n_judges_failed,
+                    "cache_hits": cache_hits,
+                    "cache_hit_rate": cache_hits / n_judges_total if n_judges_total else None,
+                    "judge_gap_median": self._percentile(judge_gaps, 0.50),
+                    "judge_gap_p90": self._percentile(judge_gaps, 0.90),
+                    "judge_runtime_median": self._percentile(judge_runtimes, 0.50),
+                    "judge_runtime_p90": self._percentile(judge_runtimes, 0.90),
+                    "keys_remaining_start": keys_remaining_start,
+                    "keys_remaining_end": len(keys),
+                    "fixed_this_iter": len(self.state.fixed) - fixed_before,
+                    "unanimous": False,
+                    "critical_key": str(critical_key),
+                    "critical_obj_maj": obj_maj,
+                    "critical_obj_sec": obj_sec,
+                }
+            )
             
 
 
@@ -370,7 +487,7 @@ class ConsensusModelMP:
 @dataclass(frozen=True)
 class JudgeSolveResult:
     objective: float
-    solution: {DecisionKey: int}
+    solution: dict[DecisionKey, int]
     status: str 
     gap: float
     runtime: float
@@ -379,16 +496,16 @@ class VoteStats:
     def __init__(self, scenario_ids):
         self.scenario_ids = scenario_ids 
 
-        self.values: {DecisionKey: []} = defaultdict(list) 
-        self.maj: {DecisionKey: int} = {}
-        self.sec: {DecisionKey: int} = {}
-        self.p: {DecisionKey: float} = {}
+        self.values: dict[DecisionKey, list[int]] = defaultdict(list)
+        self.maj: dict[DecisionKey, int] = {}
+        self.sec: dict[DecisionKey, int] = {}
+        self.p: dict[DecisionKey, float] = {}
     
     def add_from_judge(self, res: JudgeSolveResult):
         for key, val in res.solution.items():
             self.values[key].append(val)
 
-    def _modes(self, vals: [int]):
+    def _modes(self, vals: list[int]):
         if not vals:
             return None, None, None
 

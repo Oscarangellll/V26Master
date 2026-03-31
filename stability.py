@@ -38,6 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iss_pool_end", type=int, default=50)
     parser.add_argument("--oos_pool_start", type=int, default=51)
     parser.add_argument("--oos_pool_end", type=int, default=300)
+    parser.add_argument(
+        "--gap_prune_threshold",
+        type=float,
+        default=0.10,
+        help="Skip larger scenario tree sizes when an evaluated size exceeds this MIPGap threshold.",
+    )
     
     parser.add_argument(
         "--append",
@@ -61,6 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=100,
         help="Number of ISS scenarios per instance",
     )
+    parser.add_argument(
+        "--nested_trees",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use nested scenario trees when sampling ISS scenarios.",
+    )
 
     parser.add_argument(
         "--iss_output",
@@ -82,7 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> None:
+def main() -> None:   
     parser = build_parser()
     args = parser.parse_args()
 
