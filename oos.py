@@ -36,6 +36,31 @@ OSS_COLUMNS = [
 ]
 
 
+def _coerce_int(value):
+    if pd.isna(value):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_bool(value, default=True):
+    if pd.isna(value):
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "t"}:
+        return True
+    if text in {"false", "0", "no", "n", "f"}:
+        return False
+    return default
+
+
 def _parse_solution_group(group_name, encoded):
     if not isinstance(encoded, str) or encoded.strip() == "":
         return []
@@ -90,7 +115,10 @@ def _fix_solution(model, solution):
             var.UB = 0
 
     for (group_name, key), value in solution:
-        var = getattr(model, group_name)[key]
+        group_vars = getattr(model, group_name)
+        if key not in group_vars:
+            raise KeyError(f"Missing variable key for group={group_name}, key={key}")
+        var = group_vars[key]
         var.LB = value
         var.UB = value
 
@@ -114,14 +142,19 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
     for scenario_id in oos_scenarios:
         scenario_id = int(scenario_id)
         scenario_ids = [scenario_id]
-        
-        weights = {scenario_id: 1.0}
-        model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
-        model.Params.OutputFlag = 0
-        model.Params.MIPGap = 0.02
+        try:
+            weights = {scenario_id: 1.0}
+            model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
+            model.Params.OutputFlag = 0
+            model.Params.MIPGap = 0.02
 
-        _fix_solution(model, solution)
-        model.optimize()
+            _fix_solution(model, solution)
+            model.optimize()
+        except Exception as exc:
+            print(
+                f"[OOS warning] Failed scenario={scenario_id} during model build/fix/solve: {type(exc).__name__}: {exc}"
+            )
+            continue
 
         if getattr(model, "SolCount", 0) <= 0:
             print(f"[OOS warning] No incumbent for scenario={scenario_id}, status={getattr(model, 'Status', None)}")
@@ -156,7 +189,15 @@ def run_oos(args, iss_file: str):
 
     grouped = defaultdict(list)
     for row in iss_df.itertuples(index=False):
-        grouped[int(row.tree_size)].append(row)
+        row_dict = row._asdict()
+        tree_size = _coerce_int(row_dict.get("tree_size"))
+        if tree_size is None:
+            print(
+                "[OOS skip] ISS row has invalid tree_size; skipping row. "
+                f"instance={row_dict.get('instance_id')}, tree_size={row_dict.get('tree_size')}"
+            )
+            continue
+        grouped[tree_size].append(row)
 
     if args.oos_output is None:
         output_path = Path("results/stability") / args.case / args.method / "OSS.csv"
@@ -177,6 +218,14 @@ def run_oos(args, iss_file: str):
             row_dict = row._asdict()
             key = _solution_key(row_dict)
 
+            tree_size = _coerce_int(row_dict.get("tree_size"))
+            if tree_size is None:
+                print(
+                    "[OOS skip] Existing OOS row has invalid tree_size; skipping cache coverage row. "
+                    f"tree_size={row_dict.get('tree_size')}"
+                )
+                continue
+
             eval_cache[key] = {
                 "objective": float(row.objective),
                 "first_stage_cost": float(row.first_stage_cost),
@@ -191,7 +240,7 @@ def run_oos(args, iss_file: str):
                 "MIPGap": float(row.MIPGap),
             }
 
-            coverage_key = (int(row.tree_size), key)
+            coverage_key = (tree_size, key)
             covered = existing_instance_coverage.setdefault(coverage_key, set())
             covered.update(_parse_instances(row_dict.get("instances", "")))
 
@@ -205,14 +254,38 @@ def run_oos(args, iss_file: str):
         sol_meta = {}
 
         for row in rows:
-            solution = _decode_solution(row._asdict())
+            row_dict = row._asdict()
+            has_solution = _coerce_bool(row_dict.get("has_solution", True), default=True)
+            if not has_solution:
+                print(
+                    f"[OOS skip] ISS row without solution for tree_size={tree_size}, instance={row.instance_id}, "
+                    f"status={row_dict.get('solve_status')}, outcome={row_dict.get('solve_outcome')}"
+                )
+                continue
+
+            instance_id = _coerce_int(row_dict.get("instance_id"))
+            if instance_id is None:
+                print(
+                    f"[OOS skip] ISS row has invalid instance_id for tree_size={tree_size}; "
+                    f"instance_id={row_dict.get('instance_id')}"
+                )
+                continue
+
+            try:
+                solution = _decode_solution(row_dict)
+            except Exception as exc:
+                print(
+                    f"[OOS skip] Could not decode ISS solution for tree_size={tree_size}, instance={row.instance_id}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                continue
             
             # Skip rows with empty solutions (no incumbent found in ISS)
             if len(solution) == 0:
                 print(f"[OOS skip] Skipping empty solution from tree_size={tree_size}, instance={row.instance_id}")
                 continue
             
-            sol_to_instances[solution].append(int(row.instance_id))
+            sol_to_instances[solution].append(instance_id)
             sol_meta[solution] = row
 
         for solution, instance_ids in sol_to_instances.items():
@@ -259,7 +332,7 @@ def run_oos(args, iss_file: str):
                 meta.gamma_ST,
                 meta.alpha,
                 meta.param_signature,
-                int(meta.seed),
+                _coerce_int(getattr(meta, "seed", None)),
                 meta.iss_pool,
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
                 str(iss_file),
@@ -278,7 +351,7 @@ def run_oos(args, iss_file: str):
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run OOS from ISS.csv and write OSS.csv")
     parser.add_argument("-c", "--case", required=True)
-    parser.add_argument("-m", "--method", default="mip", choices=["mip"])
+    parser.add_argument("-m", "--method", default="mip", choices=["mip", "con_mp"])
     parser.add_argument("--iss_file", required=True)
     parser.add_argument("--oos_pool_start", type=int, default=51)
     parser.add_argument("--oos_pool_end", type=int, default=300)
