@@ -9,24 +9,35 @@ from config import ScenarioConfig
 from optimization_models import OptimizationModel
 
 def _judge(s, case, results_queue, fix_queue, sem):
-        
+     
+    sem.acquire()
+    print("Setup scenario", s)
     scenario_cfg = ScenarioConfig(case, [s])
+    print("Setup model", s)
     model = OptimizationModel(case, scenario_cfg, [s], weights={s: 1.0})
+    print("setup done", s)
     
     model.Params.OutputFlag = 0
     model.Params.MIPGap = 0.02
     model.Params.Threads = 1
+
+    sem.release()
     
     while True:
 
         fix = fix_queue.get()
+        fix.apply_to(model)
         
-        sem.acquire()
-        try:
-            fix.apply_to(model)
+        result = None
+        try: 
+            sem.acquire()
+            try:
+                print("Optimize", s)
+                model.optimize()
+                print("Solved", s)
+            finally:
+                sem.release()
 
-            model.optimize()
-        
             if model.SolCount > 0:
                 solution = {
                     (group, idx): int(var.X) 
@@ -40,17 +51,11 @@ def _judge(s, case, results_queue, fix_queue, sem):
                     model.MIPGap,
                     model.Runtime
                 )
-            else:
-                result = None
-                
+                print(result)
+        finally:   
             results_queue.put((s, fix, result))
-
             fix.remove_from(model)
-        
-        finally:
-            sem.release()
-
-        fix_queue.task_done()
+            fix_queue.task_done()
 
 DecisionKey = tuple[str, object] # (group, index), identifies a variable
 
@@ -144,6 +149,8 @@ class ConsensusModelMP:
         self.time_to_fix_eta = None 
         self.time_to_fix_gamma_LT = None
         self.time_to_tighten_gamma_ST = None
+        self.total_consensus_time = None
+
         self.fix_iteration_summaries = []
 
         self.fix_and_bounds_time_limit = 600 #18_000
