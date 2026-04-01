@@ -43,13 +43,15 @@ ISS_COLUMNS = [
     "Con_gamma_LT_judges_solved_min",
     "Con_gamma_LT_gap_p90_max",
     "Con_gamma_LT_unanimous_count",
-    "Con_gamma_ST_n_iters",
-    "Con_gamma_ST_vars_fixed",
-    "Con_gamma_ST_judges_solved_min",
-    "Con_gamma_ST_gap_p90_max",
-    "Con_gamma_ST_unanimous_count",
     "Con_fix_history_json",
     "MIPGap",
+    "has_solution",
+    "solve_status_code",
+    "solve_status",
+    "solve_outcome",
+    "gap_prune_enabled",
+    "gap_pruned",
+    "optimize_error",
     "eta",
     "gamma_LT",
     "gamma_ST",
@@ -60,6 +62,53 @@ ISS_COLUMNS = [
     "iss_pool",
     "oos_pool",
 ]
+
+
+GRB_STATUS = {
+    1: "LOADED",
+    2: "OPTIMAL",
+    3: "INFEASIBLE",
+    4: "INF_OR_UNBD",
+    5: "UNBOUNDED",
+    6: "CUTOFF",
+    7: "ITERATION_LIMIT",
+    8: "NODE_LIMIT",
+    9: "TIME_LIMIT",
+    10: "SOLUTION_LIMIT",
+    11: "INTERRUPTED",
+    12: "NUMERIC",
+    13: "SUBOPTIMAL",
+    14: "INPROGRESS",
+    15: "USER_OBJ_LIMIT",
+}
+
+
+def _status_label(status_code):
+    if status_code is None:
+        return None
+    try:
+        return GRB_STATUS.get(int(status_code), f"UNKNOWN_{status_code}")
+    except Exception:
+        return str(status_code)
+
+
+def _safe_eval(getter):
+    try:
+        return getter()
+    except Exception:
+        return None
+
+
+def _solve_outcome(has_solution, gap, gap_prune_threshold, optimize_error, status_label):
+    if optimize_error:
+        return "optimize_error"
+    if has_solution:
+        if math.isfinite(gap) and gap <= gap_prune_threshold:
+            return "solution_within_gap"
+        return "solution_gap_high_or_unknown"
+    if status_label == "TIME_LIMIT":
+        return "no_solution_time_limit"
+    return "no_solution"
 
 
 def _summarize_con_mp_insights(model):
@@ -302,6 +351,7 @@ def run_iss(args) -> str:
 
     scenario_tree_sizes = sorted(args.scenario_tree_sizes)
     gap_prune_threshold = float(getattr(args, "gap_prune_threshold", 0.10))
+    gap_prune_enabled = args.method != "con_mp"
     max_allowed_tree_size = max(scenario_tree_sizes)
 
     param_signature = _param_signature(args, case)
@@ -340,22 +390,32 @@ def run_iss(args) -> str:
             scenario_ids = scenario_ids_plan[(instance_id, tree_size)]
             weights = scenario_weights_plan[(instance_id, tree_size)]
 
-            if args.method == "mip":
-                scenario_cfg = ScenarioConfig(case, scenario_ids)
-                model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
-                model.Params.OutputFlag = 0
-                model.Params.Timelimit = 900 
-                model.Params.MIPGap = 0.02
-                model.optimize()
+            model = None
+            optimize_error = None
+            try:
+                if args.method == "mip":
+                    scenario_cfg = ScenarioConfig(case, scenario_ids)
+                    model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
+                    model.Params.OutputFlag = 0
+                    model.Params.Timelimit = 900 
+                    model.Params.MIPGap = 0.02
+                    model.optimize()
 
-            elif args.method == "con_mp":
-                model = ConsensusModelMP(case, scenario_ids, weights)
-                model.optimize()
+                elif args.method == "con_mp":
+                    model = ConsensusModelMP(case, scenario_ids, weights)
+                    model.optimize()
 
-            else:
-                raise ValueError(f"Unsupported method: {args.method}")
+                else:
+                    raise ValueError(f"Unsupported method: {args.method}")
+            except Exception as exc:
+                optimize_error = f"{type(exc).__name__}: {exc}"
+                print(
+                    "[ISS error] "
+                    f"Optimization failed for instance={instance_id}, tree_size={tree_size}, method={args.method}. "
+                    f"error={optimize_error}"
+                )
 
-            has_solution = bool(getattr(model, "SolCount", 0) > 0)
+            has_solution = bool(model is not None and getattr(model, "SolCount", 0) > 0)
             if has_solution:
                 solution = frozenset(
                     ((group, idx), int(var.X))
@@ -367,13 +427,26 @@ def run_iss(args) -> str:
                 print(
                     "[ISS warning] "
                     f"No incumbent found for instance={instance_id}, tree_size={tree_size}, method={args.method}, "
-                    f"status={getattr(model, 'Status', None)}."
+                    f"status={getattr(model, 'Status', None)}, error={optimize_error}."
                 )
 
+            status_code = getattr(model, "Status", None) if model is not None else None
+            status_label = _status_label(status_code)
+
             try:
-                gap = float(model.MIPGap)
+                gap = float(model.MIPGap) if model is not None else float("nan")
             except Exception:
                 gap = float("nan")
+
+            solve_outcome = _solve_outcome(
+                has_solution=has_solution,
+                gap=gap,
+                gap_prune_threshold=gap_prune_threshold,
+                optimize_error=optimize_error,
+                status_label=status_label,
+            )
+            gap_bad = (not math.isfinite(gap)) or gap > gap_prune_threshold
+            gap_pruned = gap_bad and tree_size < max_allowed_tree_size and gap_prune_enabled
 
             (
                 group_summaries,
@@ -387,21 +460,21 @@ def run_iss(args) -> str:
             row = [
                 instance_id,
                 tree_size,
-                model.ObjVal if has_solution else None,
-                model.first_obj.getValue() if has_solution else None,
-                model.second_obj.getValue() if has_solution else None,
-                model.charter_cost_ST.getValue() if has_solution else None,
-                model.charter_cost_LT.getValue() if has_solution else None,
-                model.charter_cost_mob.getValue() if has_solution else None,
-                model.downtime_cost.getValue() if has_solution else None,
-                model.travel_cost_S.getValue() if has_solution else None,
-                model.travel_cost_M.getValue() if has_solution else None,
-                model.Runtime if args.method == "mip" else None,
-                model.total_consensus_time if args.method == "con_mp" else None,
-                model.time_to_fix_eta if args.method == "con_mp" else None,
-                model.time_to_fix_gamma_LT if args.method == "con_mp" else None,
-                model.time_to_tighten_gamma_ST if args.method == "con_mp" else None,
-                model.Runtime if args.method == "con_mp" else None,
+                _safe_eval(lambda: model.ObjVal) if has_solution else None,
+                _safe_eval(lambda: model.first_obj.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.second_obj.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.charter_cost_ST.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.charter_cost_LT.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.charter_cost_mob.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.downtime_cost.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.travel_cost_S.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.travel_cost_M.getValue()) if has_solution else None,
+                _safe_eval(lambda: model.Runtime) if args.method == "mip" and model is not None else None,
+                _safe_eval(lambda: model.total_consensus_time) if args.method == "con_mp" and model is not None else None,
+                _safe_eval(lambda: model.time_to_fix_eta) if args.method == "con_mp" and model is not None else None,
+                _safe_eval(lambda: model.time_to_fix_gamma_LT) if args.method == "con_mp" and model is not None else None,
+                _safe_eval(lambda: model.time_to_tighten_gamma_ST) if args.method == "con_mp" and model is not None else None,
+                _safe_eval(lambda: model.Runtime) if args.method == "con_mp" and model is not None else None,
                 group_summaries.get("eta", {}).get("n_iters") if group_summaries else None,
                 group_summaries.get("eta", {}).get("vars_fixed") if group_summaries else None,
                 group_summaries.get("eta", {}).get("judges_solved_min") if group_summaries else None,
@@ -412,13 +485,15 @@ def run_iss(args) -> str:
                 group_summaries.get("gamma_LT", {}).get("judges_solved_min") if group_summaries else None,
                 group_summaries.get("gamma_LT", {}).get("gap_p90_max") if group_summaries else None,
                 group_summaries.get("gamma_LT", {}).get("unanimous_count") if group_summaries else None,
-                group_summaries.get("gamma_ST", {}).get("n_iters") if group_summaries else None,
-                group_summaries.get("gamma_ST", {}).get("vars_fixed") if group_summaries else None,
-                group_summaries.get("gamma_ST", {}).get("judges_solved_min") if group_summaries else None,
-                group_summaries.get("gamma_ST", {}).get("gap_p90_max") if group_summaries else None,
-                group_summaries.get("gamma_ST", {}).get("unanimous_count") if group_summaries else None,
                 json.dumps(compact_history, separators=(",", ":")) if compact_history else None,
                 gap,
+                has_solution,
+                status_code,
+                status_label,
+                solve_outcome,
+                gap_prune_enabled,
+                gap_pruned,
+                optimize_error,
                 _encode_solution_group(solution, "eta"),
                 _encode_solution_group(solution, "gamma_LT"),
                 _encode_solution_group(solution, "gamma_ST"),
@@ -434,13 +509,18 @@ def run_iss(args) -> str:
                 writer = csv.writer(f)
                 writer.writerow(row)
 
-            gap_bad = (not math.isfinite(gap)) or gap > gap_prune_threshold
-            if gap_bad and tree_size < max_allowed_tree_size:
+            if gap_pruned:
                 max_allowed_tree_size = tree_size
                 print(
                     "[ISS pruning] "
                     f"instance={instance_id}, tree_size={tree_size}, gap={gap} > {gap_prune_threshold}. "
                     f"Skipping larger tree sizes (> {max_allowed_tree_size}) for this and future instances."
+                )
+            elif gap_bad and tree_size < max_allowed_tree_size and not gap_prune_enabled:
+                print(
+                    "[ISS note] "
+                    f"instance={instance_id}, tree_size={tree_size}, gap={gap} > {gap_prune_threshold}, "
+                    "but pruning is disabled for con_mp."
                 )
 
     return str(output_path)

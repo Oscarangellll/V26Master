@@ -20,11 +20,83 @@ parser.add_argument(
     action="store_true",
     help="Skip opening the interactive plot window",
 )
+parser.add_argument(
+    "--tree_sizes",
+    type=int,
+    nargs="+",
+    default=None,
+    help="Optional explicit tree sizes for x-axis (e.g. 1 3 5 7 9 11 13 15)",
+)
 args = parser.parse_args()
 
 # Read the results
 iss = pd.read_csv(args.iss_file)
 oss = pd.read_csv(args.oss_file)
+
+
+def _series_tree_sizes(df: pd.DataFrame) -> pd.Series:
+    if "tree_size" not in df.columns:
+        return pd.Series(dtype=int)
+    ts = pd.to_numeric(df["tree_size"], errors="coerce").dropna()
+    return ts.astype(int)
+
+
+def _plot_with_stop(ax, df: pd.DataFrame, y_col: str, color: str, marker: str, label: str, stop_ts):
+    if df.empty or y_col not in df.columns:
+        return
+
+    df_local = df[["tree_size", y_col]].dropna().sort_values("tree_size").copy()
+    if df_local.empty:
+        return
+
+    if stop_ts is None:
+        ax.plot(
+            df_local["tree_size"],
+            df_local[y_col],
+            color=color,
+            marker=marker,
+            linewidth=2.5,
+            markersize=7,
+            label=label,
+        )
+        return
+
+    solid_df = df_local[df_local["tree_size"] < stop_ts]
+    stop_df = df_local[df_local["tree_size"] == stop_ts]
+
+    if not solid_df.empty:
+        ax.plot(
+            solid_df["tree_size"],
+            solid_df[y_col],
+            color=color,
+            marker=marker,
+            linewidth=2.5,
+            markersize=7,
+            label=label,
+        )
+    else:
+        ax.plot([], [], color=color, marker=marker, linewidth=2.5, markersize=7, label=label)
+
+    if not stop_df.empty:
+        if not solid_df.empty:
+            tail = pd.concat([solid_df.tail(1), stop_df]).sort_values("tree_size")
+            ax.plot(
+                tail["tree_size"],
+                tail[y_col],
+                color=color,
+                linestyle="--",
+                linewidth=2.5,
+                alpha=0.8,
+            )
+        ax.plot(
+            stop_df["tree_size"],
+            stop_df[y_col],
+            color=color,
+            marker=marker,
+            markersize=7,
+            linestyle="none",
+            alpha=0.8,
+        )
 
 # Filter out pruned/empty solutions from OOS (where mean objective is 0 or null)
 oss_valid = oss[oss["objective"].notna() & (oss["objective"] > 0)].copy()
@@ -91,82 +163,42 @@ oss_ci = pd.DataFrame(oss_stats)
 # Create two subplots
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(5, 7))
 
-# Find which tree_sizes had pruning in ISS
-pruned_tree_sizes = set(iss_ci[iss_ci["is_pruned"]]["tree_size"].values)
+# Define x-axis tree sizes from input argument or data
+if args.tree_sizes:
+    x_tree_sizes = sorted(set(args.tree_sizes))
+else:
+    x_tree_sizes = sorted(set(_series_tree_sizes(iss)).union(set(_series_tree_sizes(oss))))
 
-# Separate OOS data by whether corresponding ISS tree_size was pruned
-oss_normal = oss_ci[~oss_ci["tree_size"].isin(pruned_tree_sizes)]
-oss_unreliable = oss_ci[oss_ci["tree_size"].isin(pruned_tree_sizes)]
+# Detect first prune point in ISS and use it as visual stop point
+stop_ts = None
+if not iss_ci.empty and "is_pruned" in iss_ci.columns:
+    pruned = iss_ci[iss_ci["is_pruned"]].sort_values("tree_size")
+    if not pruned.empty:
+        stop_ts = int(pruned.iloc[0]["tree_size"])
 
 # ========== Plot 1: ISS vs OOS curves ==========
-# Separate pruned and non-pruned ISS data for plotting with different line styles
-iss_normal = iss_ci[~iss_ci["is_pruned"]]
-iss_pruned = iss_ci[iss_ci["is_pruned"]]
-
-# Plot normal ISS points and line
-if len(iss_normal) > 0:
-    ax1.plot(iss_normal["tree_size"], iss_normal["mean"], 
-             color="blue", marker="o", linewidth=2.5, markersize=7, label="In-sample (ISS)")
-    # If there are pruned points, extend line with dashes
-    if len(iss_pruned) > 0:
-        combined_iss = pd.concat([iss_normal, iss_pruned]).sort_values("tree_size")
-        ax1.plot(combined_iss["tree_size"], combined_iss["mean"], 
-                color="blue", linestyle="--", linewidth=2.5, alpha=0.6)
-        # Highlight pruned points
-        ax1.plot(iss_pruned["tree_size"], iss_pruned["mean"], 
-                color="blue", marker="o", markersize=7, linestyle="none", alpha=0.6)
-
-# Plot normal OOS
-if len(oss_normal) > 0:
-    ax1.plot(oss_normal["tree_size"], oss_normal["mean"], 
-             color="red", marker="s", linewidth=2.5, markersize=7, label="Out-of-sample (OOS)")
-    # If there are unreliable points, extend line with dashes
-    if len(oss_unreliable) > 0:
-        combined_oss = pd.concat([oss_normal, oss_unreliable]).sort_values("tree_size")
-        ax1.plot(combined_oss["tree_size"], combined_oss["mean"], 
-                color="red", linestyle="--", linewidth=2.5, alpha=0.6)
-        # Highlight unreliable points
-        ax1.plot(oss_unreliable["tree_size"], oss_unreliable["mean"], 
-                color="red", marker="s", markersize=7, linestyle="none", alpha=0.6)
+_plot_with_stop(ax1, iss_ci, "mean", color="blue", marker="o", label="In-sample (ISS)", stop_ts=stop_ts)
+_plot_with_stop(ax1, oss_ci, "mean", color="red", marker="s", label="Out-of-sample (OOS)", stop_ts=stop_ts)
 
 ax1.set_xlabel("Tree size", fontsize=12)
 ax1.set_ylabel("Objective value", fontsize=12)
 ax1.set_title("Stability: ISS vs OOS mean objectives", fontsize=13, fontweight="bold")
 ax1.legend(fontsize=11, loc="best")
 ax1.grid(True, alpha=0.3)
+if x_tree_sizes:
+    ax1.set_xticks(x_tree_sizes)
 
 # ========== Plot 2: Coefficient of Variation (CV) ==========
-# Separate pruned and non-pruned ISS CV for plotting
-if len(iss_normal) > 0:
-    ax2.plot(iss_normal["tree_size"], iss_normal["cv"], 
-             color="blue", marker="o", linewidth=2.5, markersize=7, label="ISS CV")
-    # If there are pruned points, extend line with dashes
-    if len(iss_pruned) > 0:
-        combined_iss = pd.concat([iss_normal, iss_pruned]).sort_values("tree_size")
-        ax2.plot(combined_iss["tree_size"], combined_iss["cv"], 
-                color="blue", linestyle="--", linewidth=2.5, alpha=0.6)
-        # Highlight pruned points
-        ax2.plot(iss_pruned["tree_size"], iss_pruned["cv"], 
-                color="blue", marker="o", markersize=7, linestyle="none", alpha=0.6)
-
-# Plot normal OOS CV
-if len(oss_normal) > 0:
-    ax2.plot(oss_normal["tree_size"], oss_normal["cv"], 
-             color="red", marker="s", linewidth=2.5, markersize=7, label="OOS CV")
-    # If there are unreliable points, extend line with dashes
-    if len(oss_unreliable) > 0:
-        combined_oss = pd.concat([oss_normal, oss_unreliable]).sort_values("tree_size")
-        ax2.plot(combined_oss["tree_size"], combined_oss["cv"], 
-                color="red", linestyle="--", linewidth=2.5, alpha=0.6)
-        # Highlight unreliable points
-        ax2.plot(oss_unreliable["tree_size"], oss_unreliable["cv"], 
-                color="red", marker="s", markersize=7, linestyle="none", alpha=0.6)
+_plot_with_stop(ax2, iss_ci, "cv", color="blue", marker="o", label="ISS CV", stop_ts=stop_ts)
+_plot_with_stop(ax2, oss_ci, "cv", color="red", marker="s", label="OOS CV", stop_ts=stop_ts)
 
 ax2.set_xlabel("Tree size", fontsize=12)
 ax2.set_ylabel("Coefficient of Variation (std/mean)", fontsize=12)
 ax2.set_title("Relative variability: CV across instances", fontsize=13, fontweight="bold")
 ax2.legend(fontsize=11, loc="best")
 ax2.grid(True, alpha=0.3)
+if x_tree_sizes:
+    ax2.set_xticks(x_tree_sizes)
 
 plt.tight_layout()
 if not args.no_show:
@@ -174,8 +206,10 @@ if not args.no_show:
 
 # Optional: print summary table
 print("\n=== Summary Statistics ===\n")
-print("ISS (In-sample) - stipled lines indicate tree sizes where pruning occurred:\n")
+print("ISS (In-sample) - stipled segment ends at first pruned tree size:\n")
 print(iss_ci[["tree_size", "mean", "sd", "cv", "n", "is_pruned"]].to_string(index=False))
 print("\nOSS (Out-of-sample) - invalid/pruned solutions excluded:\n")
 print(oss_ci[["tree_size", "mean", "sd", "cv", "n"]].to_string(index=False))
+if stop_ts is not None:
+    print(f"\nDetected stop point from ISS pruning: tree_size={stop_ts}")
 print("\n")
