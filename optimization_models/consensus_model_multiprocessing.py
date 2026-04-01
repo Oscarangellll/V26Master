@@ -11,11 +11,9 @@ from optimization_models import OptimizationModel
 def _judge(s, case, results_queue, fix_queue, sem):
      
     sem.acquire()
-    print("Setup scenario", s)
+    
     scenario_cfg = ScenarioConfig(case, [s])
-    print("Setup model", s)
     model = OptimizationModel(case, scenario_cfg, [s], weights={s: 1.0})
-    print("setup done", s)
     
     model.Params.OutputFlag = 0
     model.Params.MIPGap = 0.02
@@ -32,9 +30,7 @@ def _judge(s, case, results_queue, fix_queue, sem):
         try: 
             sem.acquire()
             try:
-                print("Optimize", s)
                 model.optimize()
-                print("Solved", s)
             finally:
                 sem.release()
 
@@ -51,7 +47,6 @@ def _judge(s, case, results_queue, fix_queue, sem):
                     model.MIPGap,
                     model.Runtime
                 )
-                print(result)
         finally:   
             results_queue.put((s, fix, result))
             fix.remove_from(model)
@@ -153,8 +148,8 @@ class ConsensusModelMP:
 
         self.fix_iteration_summaries = []
 
-        self.fix_and_bounds_time_limit = 600 #18_000
-        self.master_model_time_limit = 300 #3_600
+        self.fix_and_bounds_time_limit = 5 * 3_600
+        self.master_model_time_limit = 3_600
 
     @staticmethod
     def _safe_float(value):
@@ -195,7 +190,7 @@ class ConsensusModelMP:
                     )
             )
                 self.judges[s].start()
-
+            
             self.fix_eta()
             t1 = time.perf_counter()
             self.time_to_fix_eta = t1 - self.t0
@@ -241,7 +236,7 @@ class ConsensusModelMP:
         self.master_model = master_model
 
         self.total_consensus_time = time.perf_counter() - self.t0
-
+    
     def fix_eta(self):
         keys: set[DecisionKey] = {("eta", b) for b in self.case.B}
         
