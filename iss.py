@@ -351,7 +351,6 @@ def run_iss(args) -> str:
 
     scenario_tree_sizes = sorted(args.scenario_tree_sizes)
     gap_prune_threshold = float(getattr(args, "gap_prune_threshold", 0.10))
-    gap_prune_enabled = args.method != "con_mp"
     max_allowed_tree_size = max(scenario_tree_sizes)
 
     param_signature = _param_signature(args, case)
@@ -446,7 +445,7 @@ def run_iss(args) -> str:
                 status_label=status_label,
             )
             gap_bad = (not math.isfinite(gap)) or gap > gap_prune_threshold
-            gap_pruned = gap_bad and tree_size < max_allowed_tree_size and gap_prune_enabled
+            gap_pruned = gap_bad and tree_size < max_allowed_tree_size
 
             (
                 group_summaries,
@@ -510,17 +509,11 @@ def run_iss(args) -> str:
                 writer.writerow(row)
 
             if gap_pruned:
-                max_allowed_tree_size = tree_size
+                max_allowed_tree_size = tree_size - 1
                 print(
                     "[ISS pruning] "
                     f"instance={instance_id}, tree_size={tree_size}, gap={gap} > {gap_prune_threshold}. "
                     f"Skipping larger tree sizes (> {max_allowed_tree_size}) for this and future instances."
-                )
-            elif gap_bad and tree_size < max_allowed_tree_size and not gap_prune_enabled:
-                print(
-                    "[ISS note] "
-                    f"instance={instance_id}, tree_size={tree_size}, gap={gap} > {gap_prune_threshold}, "
-                    "but pruning is disabled for con_mp."
                 )
 
     return str(output_path)

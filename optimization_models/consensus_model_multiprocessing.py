@@ -18,6 +18,7 @@ def _judge(s, case, results_queue, fix_queue, sem):
     model.Params.OutputFlag = 0
     model.Params.MIPGap = 0.04
     model.Params.Threads = 1
+    model.Params.Timelimit = 1 * 3600
 
     sem.release()
     
@@ -148,7 +149,7 @@ class ConsensusModelMP:
 
         self.fix_iteration_summaries = []
 
-        self.fix_and_bounds_time_limit = 5 * 3_600
+        self.fix_and_bounds_time_limit = 3 * 3_600
         self.master_model_time_limit = 3_600
 
     @staticmethod
