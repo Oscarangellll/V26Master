@@ -16,7 +16,7 @@ def _judge(s, case, results_queue, fix_queue, sem):
     model = OptimizationModel(case, scenario_cfg, [s], weights={s: 1.0})
     
     model.Params.OutputFlag = 0
-    model.Params.MIPGap = 0.02
+    model.Params.MIPGap = 0.04
     model.Params.Threads = 1
 
     sem.release()

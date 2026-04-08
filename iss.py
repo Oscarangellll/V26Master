@@ -397,7 +397,7 @@ def run_iss(args) -> str:
                     scenario_cfg = ScenarioConfig(case, scenario_ids)
                     model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
                     model.Params.OutputFlag = 0
-                    model.Params.Timelimit = 900 
+                    model.Params.Timelimit = 6 * 3600 
                     model.Params.MIPGap = 0.02
                     model.optimize()
 
@@ -533,9 +533,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-s", "--scenario_tree_sizes", type=int, nargs="+", required=True)
     parser.add_argument("--seed", type=int, default=99)
     parser.add_argument("--iss_pool_start", type=int, default=1)
-    parser.add_argument("--iss_pool_end", type=int, default=50)
-    parser.add_argument("--oos_pool_start", type=int, default=51)
-    parser.add_argument("--oos_pool_end", type=int, default=300)
+    parser.add_argument("--iss_pool_end", type=int, default=3000)
+    parser.add_argument("--oos_pool_start", type=int, default=3001)
+    parser.add_argument("--oos_pool_end", type=int, default=4000)
     parser.add_argument(
         "--gap_prune_threshold",
         type=float,

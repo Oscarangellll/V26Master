@@ -123,7 +123,7 @@ def _fix_solution(model, solution):
         var.UB = value
 
 
-def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
+def _evaluate_solution(case, solution, oos_scenarios, models):
     totals = {
         "objective": 0.0,
         "first_stage_cost": 0.0,
@@ -141,12 +141,8 @@ def _evaluate_solution(case, solution, oos_scenarios, scenario_cfg):
     solved_count = 0
     for scenario_id in oos_scenarios:
         scenario_id = int(scenario_id)
-        scenario_ids = [scenario_id]
         try:
-            weights = {scenario_id: 1.0}
-            model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
-            model.Params.OutputFlag = 0
-            model.Params.MIPGap = 0.02
+            model = models[scenario_id]
 
             _fix_solution(model, solution)
             model.optimize()
@@ -183,8 +179,13 @@ def run_oos(args, iss_file: str):
     case = CaseConfig(f"cases/{args.case}.yaml")
     oos_scenarios = list(range(args.oos_pool_start, args.oos_pool_end + 1))
 
-    scenario_cfg = ScenarioConfig(case, oos_scenarios)
-
+    models = {}
+    for scenario_id in oos_scenarios:
+        scenario_cfg = ScenarioConfig(case, [scenario_id])
+        models[scenario_id] = OptimizationModel(case, scenario_cfg, [scenario_id], {scenario_id: 1.0})
+        models[scenario_id].Params.OutputFlag = 0
+        models[scenario_id].Params.MIPGap = 0.02
+        
     iss_df = pd.read_csv(iss_file)
 
     grouped = defaultdict(list)
@@ -308,7 +309,7 @@ def run_oos(args, iss_file: str):
             if key in eval_cache:
                 result = eval_cache[key]
             else:
-                result = _evaluate_solution(case, solution, oos_scenarios, scenario_cfg)
+                result = _evaluate_solution(case, solution, oos_scenarios, models)
                 eval_cache[key] = result
 
             meta = sol_meta[solution]
