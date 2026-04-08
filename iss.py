@@ -396,7 +396,7 @@ def run_iss(args) -> str:
                     scenario_cfg = ScenarioConfig(case, scenario_ids)
                     model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
                     model.Params.OutputFlag = 0
-                    model.Params.Timelimit = 6 * 3600 
+                    model.Params.Timelimit = 4 * 3600 
                     model.Params.MIPGap = 0.02
                     model.optimize()
 
