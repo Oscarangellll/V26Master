@@ -149,8 +149,8 @@ class ConsensusModelMP:
 
         self.fix_iteration_summaries = []
 
-        self.fix_and_bounds_time_limit = 3 * 3_600
-        self.master_model_time_limit = 3_600
+        self.fix_and_bounds_time_limit = 2.5 * 3_600
+        self.master_model_time_limit = 1.5 * 3_600
 
     @staticmethod
     def _safe_float(value):
