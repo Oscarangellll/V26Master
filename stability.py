@@ -56,19 +56,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Append only new OOS rows and reuse previously evaluated solutions",
     )
     parser.add_argument(
-        "--scenario_reduction",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use k-medoids scenario reduction within each instance pool",
-    )
-    parser.add_argument(
-        "--instance_pool_size",
-        type=int,
-        default=100,
-        help="Number of ISS scenarios per instance",
-    )
-
-    parser.add_argument(
         "--iss_output",
         default=None,
         help="Optional ISS output path (default: results/stability/<case>/<method>/ISS.csv)",
@@ -79,11 +66,56 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional OOS output path (default: results/stability/<case>/<method>/OSS.csv)",
     )
     parser.add_argument(
-        "--features_setting",
-        type=int,
-        choices=[1, 2, 3],
-        default=1,
-        help="Features to use for scenario reduction: 1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures",
+        "--sampling_strategy",
+        choices=["random", "stratified_bins"],
+        default="random",
+        help="Scenario sampling strategy.",
+    )
+    parser.add_argument(
+        "--tail_fraction",
+        type=float,
+        default=0.20,
+        help="y in [0, 0.5]: top y%% is kind bin, bottom y%% is harsh bin.",
+    )
+    parser.add_argument(
+        "--prob_kind",
+        type=float,
+        default=0.20,
+        help="Sampling probability mass for kind bin.",
+    )
+    parser.add_argument(
+        "--prob_normal",
+        type=float,
+        default=0.60,
+        help="Sampling probability mass for normal bin.",
+    )
+    parser.add_argument(
+        "--prob_harsh",
+        type=float,
+        default=0.20,
+        help="Sampling probability mass for harsh bin.",
+    )
+    parser.add_argument(
+        "--kindness_metric",
+        choices=[
+            "count_location_days_over_threshold",
+            "total_window_hours",
+            "count_location_days_under_threshold",
+            "max_bad_streak_under_threshold",
+        ],
+        default="count_location_days_over_threshold",
+        help="Axis used to rank scenarios from kind to harsh.",
+    )
+    parser.add_argument(
+        "--kindness_ww_threshold",
+        type=float,
+        default=8.0,
+        help="Threshold used by threshold-based kindness metrics.",
+    )
+    parser.add_argument(
+        "--kindness_vessel",
+        default=None,
+        help="Optional vessel name for kindness metric. Defaults to first vessel type in case.",
     )
     return parser
 

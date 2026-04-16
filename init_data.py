@@ -4,37 +4,51 @@ import numpy as np
 
 from data.fixed_data import data
 from data.scripts import fetch_weather_data
-from data.scripts import process_price_data 
 from data.scripts import generate_scenarios
 from data.scripts import make_scenarios
+from data.scripts import process_price_data
 
 
-parser = argparse.ArgumentParser()
+def build_parser():
+    parser = argparse.ArgumentParser()
 
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument(
-    "--fetch_weather",
-    action="store_true",
-    help="Fetch new weather data"
-)
-group.add_argument(
-    "--no_fetch_weather",
-    action="store_true",
-    help="Do not fetch new weather data"
-)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        "--fetch_weather",
+        action="store_true",
+        help="Fetch new weather data",
+    )
+    group.add_argument(
+        "--no_fetch_weather",
+        action="store_true",
+        help="Do not fetch new weather data",
+    )
 
-args = parser.parse_args()
+    parser.add_argument(
+        "--n_scenarios",
+        type=int,
+        default=data.n_scenarios_to_generate,
+        help="Number of scenarios to generate.",
+    )
+    return parser
 
-if args.fetch_weather:
-    fetch_weather_data()
-else:
-    print("Skipping weather fetch...")
 
-process_price_data()
+def main():
+    args = build_parser().parse_args()
 
-rng = np.random.default_rng(seed=data.generate_scenarios_seed)
-scenarios = [s for s in range(1, data.n_scenarios_to_generate + 1)]
+    if args.fetch_weather:
+        fetch_weather_data()
+    else:
+        print("Skipping weather fetch...")
 
-generate_scenarios(rng, scenarios)
+    process_price_data()
 
-make_scenarios(scenarios)
+    rng = np.random.default_rng(seed=data.generate_scenarios_seed)
+    scenarios = [s for s in range(1, args.n_scenarios + 1)]
+
+    generate_scenarios(rng, scenarios)
+    make_scenarios(scenarios)
+
+
+if __name__ == "__main__":
+    main()

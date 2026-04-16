@@ -16,15 +16,10 @@ def _generate_weather(rng, scenarios):
     wm = WeatherModel()
 
     for s in scenarios:
+        df = wm.simulate(rng)
 
-        rows = []
-        for wl in data.weather_locations:
-
-            df = wm.simulate(wl.id, rng)
-            df["s"] = s
-            rows.append(df)
-
-        df = pd.concat(rows, ignore_index=True)
+        df["s"] = s
+        
         df.to_parquet(
             scenario_data_dir / "weather",
             partition_cols=["s"],

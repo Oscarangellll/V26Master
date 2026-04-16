@@ -11,7 +11,9 @@ import numpy as np
 import pandas as pd
 
 from config import CaseConfig, ScenarioConfig
-from config.scenario_reduction import perform_scenario_reduction
+from config.stratified_sampling import (
+    sample_stratified_scenarios,
+)
 from optimization_models import OptimizationModel, ConsensusModelMP
 
 
@@ -188,18 +190,8 @@ def _sample_scenarios(rng, iss_pool, tree_sizes):
         for size in tree_sizes
     }
 
-def _instance_pool(instance_id, pool_start, pool_end, pool_size):
-    lo = pool_start + (instance_id - 1) * pool_size
-    hi = lo + pool_size - 1
-    if hi > pool_end:
-        raise ValueError(
-            "Not enough ISS scenarios for requested instances. "
-            f"Instance {instance_id} requires [{lo}, {hi}] but iss_pool_end={pool_end}."
-        )
-    return list(range(lo, hi + 1))
 
-
-def _preload_reduction_inputs(case, all_iss_scenarios):
+def _preload_weather_windows(case, all_iss_scenarios):
     scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
 
     df_weather_windows = pd.read_parquet(
@@ -214,29 +206,7 @@ def _preload_reduction_inputs(case, all_iss_scenarios):
     for r in df_weather_windows.itertuples():
         weather_windows[r.s][(r.h, r.wl_id, r.d)] = r.ww
 
-    df_failures = pd.read_parquet(
-        scenario_data_dir / "failures",
-        filters=[
-            ("w", "in", case.W),
-            ("s", "in", all_iss_scenarios),
-        ],
-    )
-    failures = defaultdict(dict)
-    for r in df_failures.itertuples():
-        failures[r.s][(r.w, r.m, r.d)] = r.failures
-
-    df_downtime = pd.read_parquet(
-        scenario_data_dir / "downtime_cost",
-        filters=[
-            ("w", "in", case.W),
-            ("s", "in", all_iss_scenarios),
-        ],
-    )
-    downtime_cost = defaultdict(dict)
-    for r in df_downtime.itertuples():
-        downtime_cost[r.s][(r.w, r.d)] = r.downtime_cost
-
-    return weather_windows, failures, downtime_cost
+    return weather_windows
 
 
 def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
@@ -245,37 +215,43 @@ def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
     scenario_ids_by_instance_tree = {}
     weights_by_instance_tree = {}
 
-    weather_windows = failures = downtime_cost = None
-    if args.scenario_reduction:
-        weather_windows, failures, downtime_cost = _preload_reduction_inputs(
+    weather_windows = None
+    if getattr(args, "sampling_strategy", "random") == "stratified_bins":
+        weather_windows = _preload_weather_windows(
             case,
             all_iss_scenarios,
         )
 
     for instance_id in range(start_instance_id, start_instance_id + args.n_trees):
-        instance_pool = _instance_pool(
-            instance_id,
-            args.iss_pool_start,
-            args.iss_pool_end,
-            args.instance_pool_size,
-        )
+        instance_pool = all_iss_scenarios
 
-        if args.scenario_reduction:
+        if getattr(args, "sampling_strategy", "random") == "stratified_bins":
+            bin_probabilities = {
+                "kind": float(args.prob_kind),
+                "normal": float(args.prob_normal),
+                "harsh": float(args.prob_harsh),
+            }
             for tree_size in scenario_tree_sizes:
-                reduced_ids, reduced_weights = perform_scenario_reduction(
-                    case,
-                    instance_pool,
-                    weather_windows,
-                    downtime_cost,
-                    failures,
-                    n_reduced_scenarios=tree_size,
-                    features_setting=args.features_setting,
+                selected_ids, selected_weights, _ = sample_stratified_scenarios(
+                    rng=rng,
+                    case=case,
+                    scenario_ids=instance_pool,
+                    weather_windows=weather_windows,
+                    n_samples=tree_size,
+                    tail_fraction=float(args.tail_fraction),
+                    bin_probabilities=bin_probabilities,
+                    metric=args.kindness_metric,
+                    ww_threshold=float(args.kindness_ww_threshold),
+                    vessel_name=args.kindness_vessel,
                 )
+                
+                print(f"selected_ids for instance {instance_id} tree size {tree_size}: {[int(s) for s in selected_ids]}")
+
                 scenario_ids_by_instance_tree[(instance_id, tree_size)] = [
-                    int(s) for s in reduced_ids
+                    int(s) for s in selected_ids
                 ]
                 weights_by_instance_tree[(instance_id, tree_size)] = {
-                    int(s): float(w) for s, w in reduced_weights.items()
+                    int(s): float(w) for s, w in selected_weights.items()
                 }
         else:
             sampled = _sample_scenarios(
@@ -498,7 +474,7 @@ def run_iss(args) -> str:
                 _encode_scenarios(scenario_ids),
                 param_signature,
                 args.seed,
-                f"{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[0]}-{_instance_pool(instance_id, args.iss_pool_start, args.iss_pool_end, args.instance_pool_size)[-1]}",
+                f"{args.iss_pool_start}-{args.iss_pool_end}",
                 f"{args.oos_pool_start}-{args.oos_pool_end}",
             ]
 
@@ -534,37 +510,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip larger scenario tree sizes when an evaluated size exceeds this MIPGap threshold.",
     )
     parser.add_argument(
-        "--scenario_reduction",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Use k-medoids scenario reduction within each instance pool",
-    )
-    parser.add_argument(
-        "--instance_pool_size",
-        type=int,
-        default=100,
-        help="Number of ISS scenarios per instance",
-    )
-    parser.add_argument(
-        "--nested_trees",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-    )
-    parser.add_argument(
         "--append",
         action="store_true",
         help="Append ISS rows to existing ISS.csv",
     )
     parser.add_argument("--iss_output", default=None)
     parser.add_argument("--oos_output", default=None)
-    #add parser for features: should have int between 1 and 3 (1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures)
     parser.add_argument(
-        "--features_setting",
-        type=int,
-        choices=[1, 2, 3],
-        default=1,
-        help="Features to use for scenario reduction: 1 for only weather features, 2 for weather + downtime, 3 for weather + downtime + failures",
+        "--sampling_strategy",
+        choices=["random", "stratified_bins"],
+        default="random",
+        help="Scenario sampling strategy.",
     )
+    parser.add_argument(
+        "--tail_fraction",
+        type=float,
+        default=0.20,
+        help="y in [0, 0.5]: top y%% is kind bin, bottom y%% is harsh bin.",
+    )
+    parser.add_argument("--prob_kind", type=float, default=0.20)
+    parser.add_argument("--prob_normal", type=float, default=0.60)
+    parser.add_argument("--prob_harsh", type=float, default=0.20)
+    parser.add_argument(
+        "--kindness_metric",
+        choices=[
+            "count_location_days_over_threshold",
+            "total_window_hours",
+            "count_location_days_under_threshold",
+            "max_bad_streak_under_threshold",
+        ],
+        default="count_location_days_over_threshold",
+    )
+    parser.add_argument("--kindness_ww_threshold", type=float, default=8.0)
+    parser.add_argument("--kindness_vessel", default=None)
     return parser
 
 
