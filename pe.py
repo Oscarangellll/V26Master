@@ -10,6 +10,7 @@ from data.fixed_data import data
 TARGET_VESSEL = "CTV"
 TARGET_WL_IDS = [3, 4]
 MAX_SCENARIOS = 3000
+RAW_WEATHER_MAX_SCENARIOS = 300
 WW_KIND_THRESHOLD = 8
 KIND_MONTHS = {10, 11, 12, 1, 2, 3}
 SCENARIO_DATA_DIR = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
@@ -367,6 +368,119 @@ def build_real_per_location_max_bad_streak(ww_threshold=4.0):
 	return streaks.reset_index()
 
 
+def build_scenario_monthly_longest_storm_mean(ww_threshold=4.0):
+	df = pd.read_parquet(
+		SCENARIO_DATA_DIR / "weather_windows",
+		columns=["h", "wl_id", "s", "d", "ww"],
+	)
+	df = df.dropna(subset=["h", "wl_id", "s", "d", "ww"]).copy()
+	df["h"] = df["h"].astype(str)
+	df["wl_id"] = df["wl_id"].astype(int)
+	df["s"] = df["s"].astype(int)
+	df["d"] = df["d"].astype(int)
+	df["ww"] = df["ww"].astype(float)
+	df = keep_first_scenarios(df)
+
+	df = df[(df["h"] == TARGET_VESSEL) & (df["wl_id"].isin(TARGET_WL_IDS))].copy()
+	df["month"] = df["d"].map(day_to_month)
+
+	daily = (
+		df.groupby(["s", "d", "month"], as_index=False)
+		.agg(
+			n_locs=("wl_id", "nunique"),
+			n_bad=("ww", lambda x: int((x < ww_threshold).sum())),
+		)
+	)
+	daily = daily[daily["n_locs"] == len(TARGET_WL_IDS)].copy()
+	daily["all_bad"] = daily["n_bad"] == len(TARGET_WL_IDS)
+
+	rows = []
+	for (s, month), group in daily.groupby(["s", "month"]):
+		group = group.sort_values("d")
+		longest = longest_consecutive_bad_days(
+			group["d"].to_numpy(),
+			group["all_bad"].to_numpy(),
+		)
+		rows.append({"s": int(s), "month": int(month), "longest_storm": float(longest)})
+
+	if not rows:
+		return pd.Series(dtype=float, name="scenario_longest_storm")
+
+	monthly = pd.DataFrame(rows).groupby("month")["longest_storm"].mean()
+	monthly = monthly.reindex(range(1, 13), fill_value=0.0)
+	return monthly.rename("scenario_longest_storm")
+
+
+def build_real_monthly_longest_storm_mean(ww_threshold=4.0):
+	max_wave = next(v.max_wave for v in data.vessel_types if v.name == TARGET_VESSEL)
+
+	df = pd.read_csv("data/weather/weather.csv")
+	df = df[df["weather_location_id"].isin(TARGET_WL_IDS)].copy()
+	df["time"] = pd.to_datetime(df["time"])
+	df["hour"] = df["time"].dt.hour
+	df["year"] = df["time"].dt.year
+	df["day_of_year"] = df["time"].dt.dayofyear
+	df["month"] = df["time"].dt.month
+
+	working_hours = list(range(data.work_day_start, data.work_day_end))
+	df = df[df["hour"].isin(working_hours)].copy()
+
+	daily_ww = (
+		df.groupby(["weather_location_id", "year", "day_of_year", "month"])["height"]
+		.apply(lambda x: longest_consecutive_ones((x <= max_wave).to_numpy()))
+		.reset_index(name="ww")
+	)
+
+	daily = (
+		daily_ww.groupby(["year", "day_of_year", "month"], as_index=False)
+		.agg(
+			n_locs=("weather_location_id", "nunique"),
+			n_bad=("ww", lambda x: int((x < ww_threshold).sum())),
+		)
+	)
+	daily = daily[daily["n_locs"] == len(TARGET_WL_IDS)].copy()
+	daily["all_bad"] = daily["n_bad"] == len(TARGET_WL_IDS)
+
+	rows = []
+	for (year, month), group in daily.groupby(["year", "month"]):
+		group = group.sort_values("day_of_year")
+		longest = longest_consecutive_bad_days(
+			group["day_of_year"].to_numpy(),
+			group["all_bad"].to_numpy(),
+		)
+		rows.append({"year": int(year), "month": int(month), "longest_storm": float(longest)})
+
+	if not rows:
+		return pd.Series(dtype=float, name="real_longest_storm")
+
+	monthly = pd.DataFrame(rows).groupby("month")["longest_storm"].mean()
+	monthly = monthly.reindex(range(1, 13), fill_value=0.0)
+	return monthly.rename("real_longest_storm")
+
+
+def plot_monthly_longest_storm(ww_threshold=4.0):
+	scenario_monthly = build_scenario_monthly_longest_storm_mean(ww_threshold=ww_threshold)
+	real_monthly = build_real_monthly_longest_storm_mean(ww_threshold=ww_threshold)
+
+	months = np.arange(1, 13)
+	labels = [pd.Timestamp(2011, m, 1).strftime("%b") for m in months]
+
+	plt.figure(figsize=(12, 5))
+	plt.plot(months, scenario_monthly.values, marker="o", linewidth=2, label="Scenarioer")
+	plt.plot(months, real_monthly.values, marker="x", linewidth=2, label="Ekte weather (år)")
+	plt.xticks(months, labels)
+	plt.xlabel("Måned")
+	plt.ylabel(f"Gjennomsnittlig lengste stormperiode (dager, WW < {ww_threshold})")
+	plt.title(
+		f"Månedlig gj.snitt av lengste stormperiode ({TARGET_VESSEL}, wl_ids={locations_label()})"
+	)
+	plt.grid(True, alpha=0.3)
+	plt.legend()
+	plt.tight_layout()
+	plt.savefig("figures/monthly_longest_storm.svg", dpi=100, bbox_inches="tight")
+	plt.close()
+
+
 def plot_persistence_diagnostics(ww_threshold=4.0):
 	joint_scenario = build_scenario_joint_bad_day_share(ww_threshold=ww_threshold).sort_values()
 	joint_real = build_real_joint_bad_day_share(ww_threshold=ww_threshold)
@@ -554,6 +668,272 @@ def day_to_month(day_index):
 	return int((reference + pd.Timedelta(days=int(day_index) - 1)).month)
 
 
+def _safe_relative_diff(simulated, observed):
+	if pd.isna(observed) or observed == 0:
+		return np.nan
+	return 100.0 * (simulated - observed) / observed
+
+
+def _fast_acf(x, max_lag=168):
+	x = np.asarray(x, dtype=float)
+	x = x[np.isfinite(x)]
+	if x.size == 0:
+		return np.full(max_lag + 1, np.nan)
+
+	x = x - x.mean()
+	var = np.dot(x, x)
+	if var <= 0:
+		out = np.zeros(max_lag + 1, dtype=float)
+		out[0] = 1.0
+		return out
+
+	n = len(x)
+	nfft = 1 << (2 * n - 1).bit_length()
+	f = np.fft.rfft(x, n=nfft)
+	acf_full = np.fft.irfft(f * np.conjugate(f), n=nfft)[:n]
+	acf = acf_full[: max_lag + 1] / var
+	acf[0] = 1.0
+	return acf
+
+
+def _month_name(m):
+	return pd.Timestamp(2011, int(m), 1).strftime("%b")
+
+
+def load_real_weather_raw():
+	df = pd.read_csv("data/weather/weather.csv")
+	df = df[df["weather_location_id"].isin(TARGET_WL_IDS)].copy()
+	df["time"] = pd.to_datetime(df["time"])
+	df["month"] = df["time"].dt.month
+	df = df.rename(columns={"weather_location_id": "wl_id"})
+	return df[["time", "wl_id", "month", "speed", "height"]]
+
+
+def load_scenario_weather_raw():
+	df = pd.read_parquet(
+		SCENARIO_DATA_DIR / "weather",
+		columns=["s", "wl_id", "d", "hour", "speed", "height"],
+	)
+	df = df.dropna(subset=["s", "wl_id", "d", "hour", "speed", "height"]).copy()
+	df["s"] = df["s"].astype(int)
+	df["wl_id"] = df["wl_id"].astype(int)
+	df["d"] = df["d"].astype(int)
+	df["hour"] = df["hour"].astype(int)
+	df["speed"] = df["speed"].astype(float)
+	df["height"] = df["height"].astype(float)
+	df = df[df["wl_id"].isin(TARGET_WL_IDS)].copy()
+
+	first_ids = sorted(df["s"].unique())[: min(MAX_SCENARIOS, RAW_WEATHER_MAX_SCENARIOS)]
+	df = df[df["s"].isin(first_ids)].copy()
+	df["month"] = df["d"].map(day_to_month)
+	return df
+
+
+def build_monthly_summary_tables(real_weather, scenario_weather):
+	months = pd.Index(range(1, 13), name="month")
+
+	tables = {}
+	for var in ["speed", "height"]:
+		real_mean = real_weather.groupby("month")[var].mean().reindex(months)
+		real_std = real_weather.groupby("month")[var].std().reindex(months)
+
+		sim_mean = scenario_weather.groupby("month")[var].mean().reindex(months)
+		sim_std = scenario_weather.groupby("month")[var].std().reindex(months)
+
+		table = pd.DataFrame(
+			{
+				("mean", "observed"): real_mean,
+				("mean", "simulated"): sim_mean,
+				("mean", "relative_difference_pct"): [_safe_relative_diff(s, o) for s, o in zip(sim_mean, real_mean)],
+				("std", "observed"): real_std,
+				("std", "simulated"): sim_std,
+				("std", "relative_difference_pct"): [_safe_relative_diff(s, o) for s, o in zip(sim_std, real_std)],
+			}
+		)
+		table.index = [_month_name(m) for m in table.index]
+		table.index.name = "month"
+		tables[var] = table
+
+	return tables
+
+
+def build_real_weather_windows_daily():
+	max_wave = next(v.max_wave for v in data.vessel_types if v.name == TARGET_VESSEL)
+	df = pd.read_csv("data/weather/weather.csv")
+	df = df[df["weather_location_id"].isin(TARGET_WL_IDS)].copy()
+	df["time"] = pd.to_datetime(df["time"])
+	df["hour"] = df["time"].dt.hour
+	df["year"] = df["time"].dt.year
+	df["day_of_year"] = df["time"].dt.dayofyear
+	df["month"] = df["time"].dt.month
+
+	working_hours = list(range(data.work_day_start, data.work_day_end))
+	df = df[df["hour"].isin(working_hours)].copy()
+
+	daily_ww = (
+		df.groupby(["weather_location_id", "year", "day_of_year", "month"])["height"]
+		.apply(lambda x: longest_consecutive_ones((x <= max_wave).to_numpy()))
+		.reset_index(name="ww")
+	)
+	daily_ww = daily_ww.rename(columns={"weather_location_id": "wl_id"})
+	return daily_ww
+
+
+def plot_weather_validation_suite(ww_threshold_good=8.0, ww_threshold_bad=4.0, acf_max_lag=168):
+	real_weather = load_real_weather_raw()
+	scenario_weather = load_scenario_weather_raw()
+
+	# 1) Empirical distributions of wind speed and wave height.
+	fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+	for ax, var, title in zip(
+		axes,
+		["speed", "height"],
+		["Empirical distribution: wind speed", "Empirical distribution: wave height"],
+	):
+		v_real = real_weather[var].to_numpy()
+		v_sim = scenario_weather[var].to_numpy()
+		vmin = float(min(np.nanmin(v_real), np.nanmin(v_sim)))
+		vmax = float(max(np.nanmax(v_real), np.nanmax(v_sim)))
+		bins = np.linspace(vmin, vmax, 60)
+
+		ax.hist(v_real, bins=bins, density=True, alpha=0.45, label="Observed", edgecolor="none")
+		ax.hist(v_sim, bins=bins, density=True, alpha=0.45, label="Simulated", edgecolor="none")
+		ax.set_title(title)
+		ax.set_xlabel(var)
+		ax.set_ylabel("Density")
+		ax.grid(True, alpha=0.25)
+
+	axes[0].legend()
+	fig.suptitle(f"Observed vs simulated raw weather ({TARGET_VESSEL}, wl_ids={locations_label()})", y=0.98)
+	fig.tight_layout(rect=[0, 0, 1, 0.95])
+	plt.savefig("figures/weather_empirical_distributions.svg", dpi=100, bbox_inches="tight")
+	plt.close()
+
+	# 2) Monthly mean/std summary tables with relative differences.
+	tables = build_monthly_summary_tables(real_weather, scenario_weather)
+	Path("results").mkdir(parents=True, exist_ok=True)
+	for var, table in tables.items():
+		table.to_csv(f"results/monthly_{var}_summary.csv")
+		print(f"\n=== Monthly summary ({var}) ===")
+		print(table.round(3).to_string())
+
+	# 3) ACF comparison for speed and height.
+	real_weather_sorted = real_weather.sort_values("time")
+	scenario_weather_sorted = scenario_weather.sort_values(["s", "d", "hour"])
+
+	acf_real_speed = _fast_acf(real_weather_sorted["speed"].to_numpy(), max_lag=acf_max_lag)
+	acf_sim_speed = _fast_acf(scenario_weather_sorted["speed"].to_numpy(), max_lag=acf_max_lag)
+	acf_real_height = _fast_acf(real_weather_sorted["height"].to_numpy(), max_lag=acf_max_lag)
+	acf_sim_height = _fast_acf(scenario_weather_sorted["height"].to_numpy(), max_lag=acf_max_lag)
+
+	lags = np.arange(acf_max_lag + 1)
+	fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+	for ax, r, s, title in zip(
+		axes,
+		[acf_real_speed, acf_real_height],
+		[acf_sim_speed, acf_sim_height],
+		["ACF speed", "ACF height"],
+	):
+		ax.plot(lags, r, linewidth=2, label="Observed")
+		ax.plot(lags, s, linewidth=2, label="Simulated")
+		ax.set_title(title)
+		ax.set_xlabel("Lag (hours)")
+		ax.set_ylabel("ACF")
+		ax.set_ylim(-0.1, 1.05)
+		ax.grid(True, alpha=0.25)
+
+	axes[0].legend()
+	fig.suptitle(f"ACF comparison ({TARGET_VESSEL}, wl_ids={locations_label()})", y=0.98)
+	fig.tight_layout(rect=[0, 0, 1, 0.95])
+	plt.savefig("figures/weather_acf_comparison.svg", dpi=100, bbox_inches="tight")
+	plt.close()
+
+	# 4) and 5) Mean number of days with WW >= 8 and WW < 4.
+	scen_ww = pd.read_parquet(
+		SCENARIO_DATA_DIR / "weather_windows",
+		columns=["h", "wl_id", "s", "d", "ww"],
+	)
+	scen_ww = scen_ww.dropna(subset=["h", "wl_id", "s", "d", "ww"]).copy()
+	scen_ww["h"] = scen_ww["h"].astype(str)
+	scen_ww["wl_id"] = scen_ww["wl_id"].astype(int)
+	scen_ww["s"] = scen_ww["s"].astype(int)
+	scen_ww["d"] = scen_ww["d"].astype(int)
+	scen_ww["ww"] = scen_ww["ww"].astype(float)
+	scen_ww = keep_first_scenarios(scen_ww)
+	scen_ww = scen_ww[(scen_ww["h"] == TARGET_VESSEL) & (scen_ww["wl_id"].isin(TARGET_WL_IDS))].copy()
+
+	obs_ww_daily = build_real_weather_windows_daily()
+	obs_ww_daily = obs_ww_daily[obs_ww_daily["wl_id"].isin(TARGET_WL_IDS)].copy()
+
+	scen_good = (
+		scen_ww[scen_ww["ww"] >= ww_threshold_good]
+		.groupby(["s", "wl_id"])
+		.size()
+		.groupby("s")
+		.sum()
+	)
+	obs_good = (
+		obs_ww_daily[obs_ww_daily["ww"] >= ww_threshold_good]
+		.groupby(["year", "wl_id"])
+		.size()
+		.groupby("year")
+		.sum()
+	)
+
+	scen_bad = (
+		scen_ww[scen_ww["ww"] < ww_threshold_bad]
+		.groupby(["s", "wl_id"])
+		.size()
+		.groupby("s")
+		.sum()
+	)
+	obs_bad = (
+		obs_ww_daily[obs_ww_daily["ww"] < ww_threshold_bad]
+		.groupby(["year", "wl_id"])
+		.size()
+		.groupby("year")
+		.sum()
+	)
+
+	good_vals = [obs_good.mean() if len(obs_good) else 0.0, scen_good.mean() if len(scen_good) else 0.0]
+	bad_vals = [obs_bad.mean() if len(obs_bad) else 0.0, scen_bad.mean() if len(scen_bad) else 0.0]
+
+	fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+	axes[0].bar(["Observed", "Simulated"], good_vals, color=["tab:orange", "tab:blue"], alpha=0.8)
+	axes[0].set_title(f"Mean #days with WW >= {ww_threshold_good}")
+	axes[0].set_ylabel("Days (location-days)")
+	axes[0].grid(True, axis="y", alpha=0.25)
+
+	axes[1].bar(["Observed", "Simulated"], bad_vals, color=["tab:orange", "tab:blue"], alpha=0.8)
+	axes[1].set_title(f"Mean #days with WW < {ww_threshold_bad}")
+	axes[1].set_ylabel("Days (location-days)")
+	axes[1].grid(True, axis="y", alpha=0.25)
+
+	fig.suptitle(f"Weather-window threshold counts ({TARGET_VESSEL}, wl_ids={locations_label()})", y=0.98)
+	fig.tight_layout(rect=[0, 0, 1, 0.95])
+	plt.savefig("figures/weather_window_threshold_counts.svg", dpi=100, bbox_inches="tight")
+	plt.close()
+
+	# 6) Distribution of weather-window durations.
+	obs_durations = obs_ww_daily["ww"].to_numpy()
+	scen_durations = scen_ww["ww"].to_numpy()
+	vmin = int(min(np.nanmin(obs_durations), np.nanmin(scen_durations)))
+	vmax = int(max(np.nanmax(obs_durations), np.nanmax(scen_durations)))
+	bins = np.arange(vmin, vmax + 2)
+
+	plt.figure(figsize=(10, 5))
+	plt.hist(obs_durations, bins=bins, density=True, alpha=0.5, label="Observed", edgecolor="black")
+	plt.hist(scen_durations, bins=bins, density=True, alpha=0.5, label="Simulated", edgecolor="black")
+	plt.xlabel("Weather window duration (hours)")
+	plt.ylabel("Density")
+	plt.title(f"Distribution of weather-window durations ({TARGET_VESSEL}, wl_ids={locations_label()})")
+	plt.grid(True, axis="y", alpha=0.25)
+	plt.legend()
+	plt.tight_layout()
+	plt.savefig("figures/weather_window_duration_distribution.svg", dpi=100, bbox_inches="tight")
+	plt.close()
+
+
 def build_scenario_winter_kindness():
 	df = pd.read_parquet(
 		SCENARIO_DATA_DIR / "weather_windows",
@@ -677,6 +1057,8 @@ def main():
 
 	plot_kindness_metric_distributions()
 	plot_persistence_diagnostics(ww_threshold=4.0)
+	plot_monthly_longest_storm(ww_threshold=4.0)
+	plot_weather_validation_suite(ww_threshold_good=8.0, ww_threshold_bad=4.0, acf_max_lag=168)
 
 	plt.figure(figsize=(12, 5))
 	bins_min = int(min(
