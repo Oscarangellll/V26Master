@@ -72,30 +72,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scenario sampling strategy.",
     )
     parser.add_argument(
-        "--tail_fraction",
-        type=float,
-        default=0.20,
-        help="y in [0, 0.5]: top y%% is kind bin, bottom y%% is harsh bin.",
-    )
-    parser.add_argument(
-        "--prob_kind",
-        type=float,
-        default=0.20,
-        help="Sampling probability mass for kind bin.",
-    )
-    parser.add_argument(
-        "--prob_normal",
-        type=float,
-        default=0.60,
-        help="Sampling probability mass for normal bin.",
-    )
-    parser.add_argument(
-        "--prob_harsh",
-        type=float,
-        default=0.20,
-        help="Sampling probability mass for harsh bin.",
-    )
-    parser.add_argument(
         "--kindness_metric",
         choices=[
             "count_location_days_over_threshold",

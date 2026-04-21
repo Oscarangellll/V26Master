@@ -226,11 +226,6 @@ def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
         instance_pool = all_iss_scenarios
 
         if getattr(args, "sampling_strategy", "random") == "stratified_bins":
-            bin_probabilities = {
-                "kind": float(args.prob_kind),
-                "normal": float(args.prob_normal),
-                "harsh": float(args.prob_harsh),
-            }
             for tree_size in scenario_tree_sizes:
                 selected_ids, selected_weights, _ = sample_stratified_scenarios(
                     rng=rng,
@@ -238,8 +233,6 @@ def _prepare_iss_plan(args, case, rng, start_instance_id, scenario_tree_sizes):
                     scenario_ids=instance_pool,
                     weather_windows=weather_windows,
                     n_samples=tree_size,
-                    tail_fraction=float(args.tail_fraction),
-                    bin_probabilities=bin_probabilities,
                     metric=args.kindness_metric,
                     ww_threshold=float(args.kindness_ww_threshold),
                     vessel_name=args.kindness_vessel,
@@ -522,15 +515,6 @@ def _build_parser() -> argparse.ArgumentParser:
         default="random",
         help="Scenario sampling strategy.",
     )
-    parser.add_argument(
-        "--tail_fraction",
-        type=float,
-        default=0.20,
-        help="y in [0, 0.5]: top y%% is kind bin, bottom y%% is harsh bin.",
-    )
-    parser.add_argument("--prob_kind", type=float, default=0.20)
-    parser.add_argument("--prob_normal", type=float, default=0.60)
-    parser.add_argument("--prob_harsh", type=float, default=0.20)
     parser.add_argument(
         "--kindness_metric",
         choices=[
