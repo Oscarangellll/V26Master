@@ -39,14 +39,14 @@ def plot_downtime_cost():
     df["downtime_cost"] = df["power"] * 24 * df["price"]
 
     df_C_D = pd.read_parquet(
-        "data/scenario_data/downtime_cost.parquet",
+        "data/scenario_data/downtime_cost",
         filters=[   
             ("s", "==", s),
             ("w", "==", w)
         ]
     )
     
-    fig, axs = plt.subplots(ncols=2, figsize=(14,5), sharey=True)
+    fig, axs = plt.subplots(ncols=2, figsize=(15/2.54,2), sharey=True)
 
     axs[0].plot(df.index, df["downtime_cost"], color="blue")
     axs[0].set_title(f"Real Downtime Cost\nWind Farm: {w}, ISO: {iso}, Year: {year}")
@@ -58,4 +58,5 @@ def plot_downtime_cost():
     axs[1].set_title(f"Synthetic Downtime Cost\nWind Farm: {w}, Scenario: {s}")
     axs[1].set_xlabel("Day")
     axs[1].grid(True)
-    plt.show()
+
+    fig.savefig("figures/plots/downtime_cost")

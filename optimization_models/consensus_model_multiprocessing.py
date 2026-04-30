@@ -12,9 +12,12 @@ def _judge(s, case, results_queue, fix_queue, sem):
      
     sem.acquire()
     
+    print("Process: ", s)
     scenario_cfg = ScenarioConfig(case, [s])
+    time.sleep(30)
+    print("Making Model")
     model = OptimizationModel(case, scenario_cfg, [s], weights={s: 1.0})
-    
+    print("Solving Model") 
     model.Params.OutputFlag = 0
     model.Params.MIPGap = 0.04
     model.Params.Threads = 1
@@ -149,8 +152,8 @@ class ConsensusModelMP:
 
         self.fix_iteration_summaries = []
 
-        self.fix_and_bounds_time_limit = 2.5 * 3_600
-        self.master_model_time_limit = 1.5 * 3_600
+        self.fix_and_bounds_time_limit = int(2.5 * 3_600)
+        self.master_model_time_limit = int(1.5 * 3_600)
 
     @staticmethod
     def _safe_float(value):
@@ -305,6 +308,7 @@ class ConsensusModelMP:
 
         # Remove keys when they become fixed. Loop exits when all keys are fixed
         while keys:
+            print(keys)
             iter_idx += 1
             fix = FixExperiment(self.state.fixed)
 
