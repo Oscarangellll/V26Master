@@ -9,17 +9,21 @@ from data.fixed_data import data
 
 class WeatherModel:
     def __init__(self):
+        self.rs = data.wind_speed_resolution
+        self.rh = data.wave_height_resolution
 
         # Bootstrap parameters.
-        self.bootstrap_block_days = 7
-        self.bootstrap_overlap_days = 1
-        self.bootstrap_perturbation_weight = 0.10
+        self.bootstrap_block_days = int(os.environ.get("WEATHER_BOOTSTRAP_BLOCK_DAYS", "7"))
+        self.bootstrap_overlap_hours = int(os.environ.get("WEATHER_BOOTSTRAP_OVERLAP_HOURS", "24"))
+        self.bootstrap_transition_hours = int(os.environ.get("WEATHER_BOOTSTRAP_TRANSITION_HOURS", "24"))
+        self.bootstrap_candidate_top_k = int(os.environ.get("WEATHER_BOOTSTRAP_CANDIDATE_TOP_K", "25"))
+        self.bootstrap_candidate_pool = int(os.environ.get("WEATHER_BOOTSTRAP_CANDIDATE_POOL", "300"))
+        self.bootstrap_transition_max_z = float(os.environ.get("WEATHER_BOOTSTRAP_TRANSITION_MAX_Z", "2.5"))
+        self.bootstrap_same_month = (
+            os.environ.get("WEATHER_BOOTSTRAP_SAME_MONTH", "1").strip().lower() not in {"0", "false", "no"}
+        )
 
         self._weather_df = None
-        self._month_segments = None
-        self._month_scales = None
-        self._wl_ids_cached = None
-
         self._fit()
 
     def _fit(self):
@@ -35,10 +39,6 @@ class WeatherModel:
                 df_weather.index = pd.to_datetime(df_weather.index)
         df_weather = df_weather.sort_index()
         self._weather_df = df_weather
-        
-        wl_ids = [wl.id for wl in data.weather_locations]
-        
-        self.precompute(wl_ids)
 
     def _month_of_sim(self):
         months = (pd.to_datetime(data.periods, format="%b").month).to_numpy() - 1
@@ -64,154 +64,129 @@ class WeatherModel:
         speed_wide = speed_wide.loc[valid]
         height_wide = height_wide.loc[valid]
 
-        wide = pd.concat(
-            [
-                speed_wide.add_suffix("_speed"),
-                height_wide.add_suffix("_height"),
-            ],
-            axis=1,
-        ).sort_index()
-        return wide
+        y_hist = np.stack([speed_wide.to_numpy(), height_wide.to_numpy()], axis=2)
+        month_hist = speed_wide.index.month.to_numpy() - 1
 
-    def _build_month_segments(self, wl_ids):
-        wide = self._build_joint_history(wl_ids)
-        month_segments = {month: [] for month in range(12)}
+        return y_hist, month_hist
 
-        for (year, month), group in wide.groupby([wide.index.year, wide.index.month], sort=True):
-            group = group.sort_index()
-            if len(group) < self.bootstrap_block_days * 24:
-                continue
+    def _candidate_starts(self, month_hist, block_len, target_month):
+        max_start = len(month_hist) - block_len
+        if max_start < 0:
+            return np.array([], dtype=int)
 
-            if group.index.to_series().diff().dropna().ne(pd.Timedelta(hours=1)).any():
-                continue
-
-            n_hours = (len(group) // 24) * 24
-            if n_hours < self.bootstrap_block_days * 24:
-                continue
-
-            month_segments[month - 1].append(group.iloc[:n_hours].to_numpy(dtype=float))
-
-        return month_segments
-
-    def _build_month_scales(self, wl_ids):
-        wide = self._build_joint_history(wl_ids)
-        month_scales = {}
-
-        for month_idx in range(12):
-            month_wide = wide[wide.index.month == (month_idx + 1)]
-            if month_wide.empty:
-                month_scales[month_idx] = (1.0, 1.0)
-                continue
-
-            speed_values = month_wide.filter(like="_speed").to_numpy(dtype=float).ravel()
-            height_values = month_wide.filter(like="_height").to_numpy(dtype=float).ravel()
-
-            speed_scale = float(np.nanstd(speed_values)) if speed_values.size else 1.0
-            height_scale = float(np.nanstd(height_values)) if height_values.size else 1.0
-            month_scales[month_idx] = (
-                speed_scale if speed_scale > 1e-8 else 1.0,
-                height_scale if height_scale > 1e-8 else 1.0,
-            )
-
-        return month_scales
-
-    def precompute(self, wl_ids):
-        wl_ids = list(wl_ids)
-        self._wl_ids_cached = wl_ids
-        self._month_segments = self._build_month_segments(wl_ids)
-        self._month_scales = self._build_month_scales(wl_ids)
-
-        missing_months = [month for month, segments in self._month_segments.items() if len(segments) == 0]
-        if missing_months:
-            raise ValueError(
-                "Missing historical bootstrap segments for months: "
-                + ", ".join(str(month + 1) for month in missing_months)
-            )
-
-    def _sample_bootstrap_block(self, month_idx, rng):
-        segments = self._month_segments.get(month_idx, [])
-        if not segments:
-            raise ValueError(f"No historical bootstrap segments available for month {month_idx + 1}.")
-
-        segment = segments[int(rng.integers(0, len(segments)))]
-        block_hours = self.bootstrap_block_days * 24
-        segment_days = segment.shape[0] // 24
-        max_start_day = segment_days - self.bootstrap_block_days
-        if max_start_day < 0:
-            raise ValueError(f"Historical month {month_idx + 1} does not contain enough days for a bootstrap block.")
-
-        start_day = int(rng.integers(0, max_start_day + 1))
-        start = start_day * 24
-        return segment[start : start + block_hours].copy()
-
-    def _blend_blocks(self, left_block, right_block):
-        overlap_hours = self.bootstrap_overlap_days * 24
-        if overlap_hours <= 0:
-            return np.vstack([left_block, right_block])
-
-        left_tail = left_block[-overlap_hours:]
-        right_head = right_block[:overlap_hours]
-        weights = np.linspace(0.0, 1.0, overlap_hours, endpoint=True)[:, None]
-        blended = left_tail * (1.0 - weights) + right_head * weights
-        return np.vstack([left_block[:-overlap_hours], blended, right_block[overlap_hours:]])
-
-    def _simulate_month(self, month_idx, rng):
-        target_hours = data.days_per_period * 24
-        block_hours = self.bootstrap_block_days * 24
-        overlap_hours = self.bootstrap_overlap_days * 24
-        if block_hours <= overlap_hours:
-            raise ValueError("Bootstrap block must be longer than the overlap window.")
-
-        step_hours = block_hours - overlap_hours
-        if target_hours <= block_hours:
-            n_blocks = 1
+        if self.bootstrap_same_month:
+            starts = np.where(month_hist[: max_start + 1] == target_month)[0]
         else:
-            n_blocks = int(np.ceil((target_hours - block_hours) / step_hours)) + 1
+            starts = np.arange(max_start + 1)
 
-        assembled = self._sample_bootstrap_block(month_idx, rng)
-        for _ in range(1, n_blocks):
-            next_block = self._sample_bootstrap_block(month_idx, rng)
-            assembled = self._blend_blocks(assembled, next_block)
+        if starts.size == 0:
+            starts = np.arange(max_start + 1)
 
-        while assembled.shape[0] < target_hours:
-            next_block = self._sample_bootstrap_block(month_idx, rng)
-            assembled = self._blend_blocks(assembled, next_block)
+        return starts
 
-        assembled = assembled[:target_hours]
+    def _select_block_start(self, y_hist, month_hist, y_out, t, block_len, month_of_sim, rng):
+        target_month = month_of_sim[t]
+        starts = self._candidate_starts(month_hist, block_len, target_month)
+        if starts.size == 0:
+            raise ValueError("Not enough historical data to sample block bootstrap weather.")
 
-        perturbation_weight = np.clip(self.bootstrap_perturbation_weight, 0.0, 1.0)
-        if perturbation_weight > 0.0:
-            speed_scale, height_scale = self._month_scales.get(month_idx, (1.0, 1.0))
-            latent = rng.normal(size=target_hours)
-            n_loc = assembled.shape[1] // 2
-            assembled[:, :n_loc] = assembled[:, :n_loc] + perturbation_weight * speed_scale * latent[:, None]
-            assembled[:, n_loc:] = assembled[:, n_loc:] + perturbation_weight * height_scale * latent[:, None]
+        if t == 0:
+            return int(rng.choice(starts))
 
-        return assembled
+        trans = min(self.bootstrap_transition_hours, t, block_len)
+        if trans <= 0:
+            return int(rng.choice(starts))
 
-    def simulate(self, rng):
-        if self._month_segments is None or self._wl_ids_cached is None:
-            raise ValueError("WeatherModel must be precomputed before simulation.")
+        prev_tail = y_out[t - trans : t]
 
-        month_order = (pd.to_datetime(data.periods, format="%b").month).to_numpy() - 1
-        month_arrays = [self._simulate_month(month_idx, rng) for month_idx in month_order]
-        y_out = np.vstack(month_arrays)
-        y_out = np.maximum(y_out, 0.0)
+        # Evaluate transition cost on a random pool for speed.
+        pool_size = max(1, min(self.bootstrap_candidate_pool, starts.size))
+        if pool_size < starts.size:
+            starts = rng.choice(starts, size=pool_size, replace=False)
 
-        n_loc = len(self._wl_ids_cached)
-        hours = np.arange(y_out.shape[0])
-        frames = []
-        for i, wl_id in enumerate(self._wl_ids_cached):
-            frames.append(
-                pd.DataFrame(
-                    {
-                        "d": hours // 24 + 1,
-                        "hour": hours % 24,
-                        "speed": y_out[:, i],
-                        "height": y_out[:, n_loc + i],
-                        "wl_id": wl_id,
-                    }
-                )
+        scale = np.std(y_hist, axis=0)
+        scale = np.where(scale > 1e-8, scale, 1.0)
+
+        offsets = np.arange(trans)
+        cand_heads = y_hist[starts[:, None] + offsets]
+        costs = np.mean(np.abs(prev_tail[None, ...] - cand_heads) / scale[None, None, ...], axis=(1, 2, 3))
+
+        order = np.argsort(costs)
+        starts_sorted = starts[order]
+        costs_sorted = costs[order]
+
+        if self.bootstrap_transition_max_z > 0:
+            valid = starts_sorted[costs_sorted <= self.bootstrap_transition_max_z]
+            if valid.size > 0:
+                starts_sorted = valid
+
+        k = max(1, min(self.bootstrap_candidate_top_k, starts_sorted.size))
+        return int(rng.choice(starts_sorted[:k]))
+
+    def simulate_joint(self, wl_ids, rng):
+        wl_ids = list(wl_ids)
+        y_hist, month_hist = self._build_joint_history(wl_ids)
+
+        month_of_sim = self._month_of_sim()
+        T_sim = len(month_of_sim)
+        n_loc = len(wl_ids)
+
+        block_hours = max(24, int(self.bootstrap_block_days * 24))
+        overlap_hours = max(0, int(self.bootstrap_overlap_hours))
+
+        y_out = np.zeros((T_sim, n_loc, 2), dtype=float)
+
+        t = 0
+        while t < T_sim:
+            overlap = 0 if t == 0 else min(overlap_hours, t)
+            remaining_with_overlap = T_sim - t + overlap
+            block_len = min(block_hours, remaining_with_overlap)
+
+            start = self._select_block_start(
+                y_hist=y_hist,
+                month_hist=month_hist,
+                y_out=y_out,
+                t=t,
+                block_len=block_len,
+                month_of_sim=month_of_sim,
+                rng=rng,
             )
+            block = y_hist[start : start + block_len]
 
-        return pd.concat(frames, ignore_index=True)
+            if t == 0:
+                write_len = min(block_len, T_sim)
+                y_out[:write_len] = block[:write_len]
+                t = write_len
+                continue
+
+            if overlap > 0:
+                existing = y_out[t - overlap : t]
+                incoming = block[:overlap]
+                alpha = np.linspace(0.0, 1.0, overlap + 2)[1:-1].reshape(-1, 1, 1)
+                y_out[t - overlap : t] = (1.0 - alpha) * existing + alpha * incoming
+
+            new_part = block[overlap:]
+            new_len = min(len(new_part), T_sim - t)
+            if new_len > 0:
+                y_out[t : t + new_len] = new_part[:new_len]
+                t += new_len
+            else:
+                break
+
+        y_out = np.maximum(y_out, 0)
+        hours = np.arange(T_sim)
+
+        out = {}
+        for i, wl_id in enumerate(wl_ids):
+            out[wl_id] = pd.DataFrame({
+                "d": hours // 24 + 1,
+                "hour": hours % 24,
+                "speed": y_out[:, i, 0],
+                "height": y_out[:, i, 1],
+                "wl_id": wl_id,
+            })
+
+        return out
+
+    def simulate(self, wl_id, rng):
+        return self.simulate_joint([wl_id], rng)[wl_id]

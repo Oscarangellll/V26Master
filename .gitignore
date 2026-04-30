@@ -3,3 +3,5 @@
 __pycache__/
 **__pycache__/
 data/scenario_data
+data/weather/weather.parquet
+data/price/price.parquet
