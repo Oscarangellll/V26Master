@@ -5,7 +5,7 @@ import argparse
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from plot_scripts.style import finalize_figure, prepare_output_path, save_table
+#from plot_scripts.style import finalize_figure, prepare_output_path, save_table
 
 
 def _require_columns(df: pd.DataFrame, columns: list[str], source: str) -> None:

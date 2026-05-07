@@ -9,19 +9,16 @@ from config import ScenarioConfig
 from optimization_models import OptimizationModel
 
 def _judge(s, case, results_queue, fix_queue, sem):
-     
     sem.acquire()
     
-    print("Process: ", s)
     scenario_cfg = ScenarioConfig(case, [s])
-    time.sleep(30)
-    print("Making Model")
+    
     model = OptimizationModel(case, scenario_cfg, [s], weights={s: 1.0})
-    print("Solving Model") 
+    
     model.Params.OutputFlag = 0
     model.Params.MIPGap = 0.04
     model.Params.Threads = 1
-    model.Params.Timelimit = 1 * 3600
+    #model.Params.Timelimit = 1 * 3600
 
     sem.release()
     
@@ -176,7 +173,7 @@ class ConsensusModelMP:
     def optimize(self):
         def _alarm_handler(signum, frame):
             raise TimeoutError
-        use_sigalrm = hasattr(signal, "SIGALRM")
+        use_sigalrm = False #hasattr(signal, "SIGALRM")
         if use_sigalrm:
             signal.signal(signal.SIGALRM, _alarm_handler)
             signal.alarm(self.fix_and_bounds_time_limit)
@@ -192,7 +189,7 @@ class ConsensusModelMP:
                         self.fix_queues[s],
                         self.sem
                     )
-            )
+                )
                 self.judges[s].start()
             
             self.fix_eta()
@@ -233,7 +230,7 @@ class ConsensusModelMP:
     
         master_model.Params.OutputFlag = 0
         master_model.Params.MIPGap = 0.02
-        master_model.Params.TimeLimit = self.master_model_time_limit
+        #master_model.Params.TimeLimit = self.master_model_time_limit
         
         master_model.optimize()
 
@@ -308,7 +305,6 @@ class ConsensusModelMP:
 
         # Remove keys when they become fixed. Loop exits when all keys are fixed
         while keys:
-            print(keys)
             iter_idx += 1
             fix = FixExperiment(self.state.fixed)
 

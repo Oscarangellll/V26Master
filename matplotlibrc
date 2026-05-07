@@ -98,7 +98,7 @@ lines.linewidth: 0.7                # line width in points
 #lines.markerfacecolor: auto        # the default marker face color
 #lines.markeredgecolor: auto        # the default marker edge color
 lines.markeredgewidth:  0.7         # the line width around the marker symbol
-#lines.markersize:      6           # marker size, in points
+lines.markersize:       3           # marker size, in points
 #lines.dash_joinstyle:  round       # {miter, round, bevel}
 #lines.dash_capstyle:   butt        # {butt, round, projecting}
 #lines.solid_joinstyle: round       # {miter, round, bevel}

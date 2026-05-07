@@ -1,47 +1,41 @@
-from __future__ import annotations
-
 import argparse
 
-from plot_scripts import PLOT_MODULES
-from plot_scripts.style import apply_default_style
+from plot_scripts.plot_stratified_comparison import plot_stratified_comparison
+from plot_scripts.plot_runtime_comparison import plot_runtime_comparison
+from plot_scripts.plot_oss_con_mip import plot_oss_con_mip
+from plot_scripts.plot_stability import plot_stability
+from plot_scripts.plot_map import plot_map
+from plot_scripts.plot_real_weather_seasonality import plot_real_weather_seasonality
+from plot_scripts.plot_real_weather_correlation import plot_real_weather_correlation 
 
+PLOT_REGISTRY = {
+    "stratified": plot_stratified_comparison,
+    "runtime": plot_runtime_comparison,
+    "oss_con_mip": plot_oss_con_mip,
+    "stability": plot_stability,
+    "map": plot_map,
+    "real_weather_seasonality": plot_real_weather_seasonality,
+    "real_weather_correlation": plot_real_weather_correlation
+}
 
-def build_parser() -> argparse.ArgumentParser:
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument(
-        "--action",
-        choices=["show", "save", "both"],
-        default="both",
-        help="Choose whether plots are shown, saved, or both.",
-    )
-    common.add_argument(
-        "--output-dir",
-        default="plot_scripts/plots",
-        help="Directory where plot images are written when --action includes save.",
-    )
-    common.add_argument(
-        "--table-dir",
-        default="plot_scripts/tables",
-        help="Directory where table outputs are written when --action includes save.",
-    )
-
+def build_parser():
     parser = argparse.ArgumentParser(
-        description="Run thesis plotting scripts with a shared style",
-        parents=[common],
+        description="Run thesis plots with shared style"
     )
 
-    subparsers = parser.add_subparsers(dest="plot", required=True)
-    for module in PLOT_MODULES:
-        module.register_parser(subparsers, common)
+    parser.add_argument(
+        "plots",
+        nargs="*",
+        choices=list(PLOT_REGISTRY.keys()),
+        help="Which plots to run (default: all)",
+    )
 
     return parser
 
+args = build_parser().parse_args()
 
-def main() -> None:
-    args = build_parser().parse_args()
-    apply_default_style()
-    args.func(args)
+# If no plots specified, run all
+selected = args.plots if args.plots else list(PLOT_REGISTRY.keys())
 
-
-if __name__ == "__main__":
-    main()
+for name in selected:
+    PLOT_REGISTRY[name]()

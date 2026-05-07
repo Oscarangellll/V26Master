@@ -6,11 +6,19 @@ import yaml
 from data.fixed_data import data
 
 class CaseConfig:
-    def __init__(self, case_path):
-        case_path = Path(case_path)
+    def __init__(self, case_path=None, coalition=None):
+        if coalition is not None:
+            case = {
+                "max_multiday_vessels": max(3, len(coalition)),
+                "bases": [b.name for b in data.bases],
+                "one_base": True, 
+                "wind_farms": coalition
+            }
+        else:
+            case_path = Path(case_path)
 
-        with case_path.open() as f:
-            case = yaml.safe_load(f)
+            with case_path.open() as f:
+                case = yaml.safe_load(f)
 
         if "vessel_types" in case:
             self.vessel_types = [
