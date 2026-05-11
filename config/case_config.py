@@ -6,12 +6,23 @@ import yaml
 from data.fixed_data import data
 
 class CaseConfig:
-    def __init__(self, case_path=None, coalition=None):
+    def __init__(
+        self,
+        case_path=None,
+        coalition=None,
+        bases=None,
+        max_multiday_vessels=None,
+        one_base=True,
+    ):
         if coalition is not None:
             case = {
-                "max_multiday_vessels": max(3, len(coalition)),
-                "bases": [b.name for b in data.bases],
-                "one_base": True, 
+                "max_multiday_vessels": (
+                    max_multiday_vessels
+                    if max_multiday_vessels is not None
+                    else max(3, len(coalition))
+                ),
+                "bases": bases if bases is not None else [b.name for b in data.bases],
+                "one_base": one_base,
                 "wind_farms": coalition
             }
         else:

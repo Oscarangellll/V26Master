@@ -7,14 +7,19 @@ from pathlib import Path
 import numpy as np
 
 from config.case_config import CaseConfig
+from config.scenario_config import ScenarioConfig
 from data.fixed_data import data
-from optimization_models import ConsensusModelMP
+from optimization_models import ConsensusModelMP, OptimizationModel
 
 
 COLUMNS = [
     "coalition",
     "coalition_size",
+    "method",
+    "bases",
     "objective",
+    "standalone_cost",
+    "synergy",
     "first_stage_cost",
     "second_stage_cost",
     "charter_cost_ST",
@@ -28,12 +33,14 @@ COLUMNS = [
     "Con_gamma_LT_runtime",
     "Con_gamma_ST_runtime",
     "Con_Master_runtime",
+    "runtime",
     "MIPGap",
     "has_solution",
     "status",
     "eta",
     "gamma_LT",
     "gamma_ST",
+    "alpha",
     "scenarios",
     "seed",
     "node_id",
@@ -51,6 +58,20 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=None,
         help="Wind farms to include. Default: all wind farms.",
+    )
+
+    parser.add_argument(
+        "--bases",
+        nargs="+",
+        default=None,
+        help="Candidate bases to include. Overrides dynamic base selection when provided.",
+    )
+
+    parser.add_argument(
+        "--max-multiday-vessels",
+        type=int,
+        default=None,
+        help="Override max number of multiday vessel indices. Default: max(3, coalition size).",
     )
 
     parser.add_argument(
@@ -83,13 +104,45 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scenario-end",
         type=int,
-        default=1500,
+        default=500,
     )
 
     parser.add_argument(
         "--seed",
         type=int,
         default=20,
+    )
+
+    parser.add_argument(
+        "--method",
+        choices=["con_mp", "mip"],
+        default="con_mp",
+        help="Solution method. Use mip for small local tests; con_mp is intended for the case-study runs.",
+    )
+
+    parser.add_argument(
+        "--mip-gap",
+        type=float,
+        default=0.02,
+        help="MIPGap used when --method mip.",
+    )
+
+    parser.add_argument(
+        "--time-limit",
+        type=float,
+        default=None,
+        help="Optional Gurobi time limit in seconds.",
+    )
+
+    parser.add_argument(
+        "--sampling-mode",
+        choices=["per-coalition", "shared"],
+        default="shared",
+        help=(
+            "Use per-coalition to draw a new scenario set for each coalition, "
+            "or shared to use the same scenario set for every coalition. "
+            "Shared is recommended for case-study coalition comparisons."
+        ),
     )
 
     parser.add_argument(
@@ -116,7 +169,7 @@ def generate_coalitions(actors: list[str]):
 def assign_coalitions(coalitions, node_id: int, num_nodes: int):
     sorted_coalitions = sorted(
         coalitions,
-        key=lambda c: (-len(c), coalition_name(c)),
+        key=lambda c: (len(c), coalition_name(c)),
     )
 
     return [
@@ -124,6 +177,13 @@ def assign_coalitions(coalitions, node_id: int, num_nodes: int):
         for i, coalition in enumerate(sorted_coalitions)
         if i % num_nodes == node_id
     ]
+
+
+def select_bases(args, coalition):
+    if args.bases is not None:
+        return [str(b) for b in args.bases]
+
+    return [b.name for b in data.bases]
 
 
 def sample_scenarios(args, rng):
@@ -175,8 +235,12 @@ def encode_scenarios(scenario_ids):
     return ";".join(map(str, sorted(int(s) for s in scenario_ids)))
 
 
+def encode_bases(bases):
+    return ";".join(map(str, bases))
+
+
 def extract_solution(model):
-    var_groups = ["eta", "gamma_LT", "gamma_ST"]
+    var_groups = ["eta", "gamma_LT", "gamma_ST", "alpha"]
 
     if getattr(model, "SolCount", 0) <= 0:
         return frozenset()
@@ -196,17 +260,74 @@ def write_header(path: Path):
 
 
 def write_row(path: Path, row: list):
+    if len(row) != len(COLUMNS):
+        raise ValueError(f"Row has {len(row)} values, expected {len(COLUMNS)}.")
+
     with path.open("a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(row)
 
 
-def solve_coalition(args, coalition, rng):
-    case = CaseConfig(coalition=coalition)
+def set_row_value(row, column, value):
+    row[COLUMNS.index(column)] = value
 
-    scenario_ids, weights = sample_scenarios(args, rng)
 
-    model = ConsensusModelMP(case, scenario_ids, weights)
+def get_row_value(row, column):
+    return row[COLUMNS.index(column)]
+
+
+def add_synergy_to_row(row, coalition, standalone_costs):
+    if str(get_row_value(row, "has_solution")).lower() not in {"true", "1"}:
+        return
+
+    objective = get_row_value(row, "objective")
+    if objective in {None, ""}:
+        return
+    objective = float(objective)
+
+    name = coalition_name(coalition)
+    if len(coalition) == 1:
+        standalone_costs[name] = objective
+        set_row_value(row, "standalone_cost", objective)
+        set_row_value(row, "synergy", 0.0)
+        return
+
+    if not all(w in standalone_costs for w in coalition):
+        return
+
+    standalone_cost = sum(standalone_costs[w] for w in coalition)
+    cost_savings = standalone_cost - objective
+    synergy = cost_savings / objective if objective else None
+
+    set_row_value(row, "standalone_cost", standalone_cost)
+    set_row_value(row, "synergy", synergy)
+
+
+def solve_coalition(args, coalition, rng, shared_sample=None):
+    bases = select_bases(args, coalition)
+    case = CaseConfig(
+        coalition=coalition,
+        bases=bases,
+        max_multiday_vessels=args.max_multiday_vessels,
+    )
+
+    if shared_sample is None:
+        scenario_ids, weights = sample_scenarios(args, rng)
+    else:
+        scenario_ids, weights = shared_sample
+
+    if args.method == "con_mp":
+        model = ConsensusModelMP(case, scenario_ids, weights)
+    elif args.method == "mip":
+        scenario_cfg = ScenarioConfig(case, scenario_ids)
+        model = OptimizationModel(case, scenario_cfg, scenario_ids, weights)
+        model.Params.OutputFlag = 0
+        model.Params.MIPGap = args.mip_gap
+        if args.time_limit is not None:
+            model.Params.TimeLimit = args.time_limit
+    else:
+        raise ValueError(f"Unsupported method: {args.method}")
+
     model.optimize()
 
     has_solution = getattr(model, "SolCount", 0) > 0
@@ -215,7 +336,11 @@ def solve_coalition(args, coalition, rng):
     row = [
         coalition_name(coalition),
         len(coalition),
+        args.method,
+        encode_bases(bases),
         safe_eval(lambda: model.ObjVal) if has_solution else None,
+        None,
+        None,
         safe_eval(lambda: model.first_obj.getValue()) if has_solution else None,
         safe_eval(lambda: model.second_obj.getValue()) if has_solution else None,
         safe_eval(lambda: model.charter_cost_ST.getValue()) if has_solution else None,
@@ -229,12 +354,14 @@ def solve_coalition(args, coalition, rng):
         safe_eval(lambda: model.time_to_fix_gamma_LT),
         safe_eval(lambda: model.time_to_tighten_gamma_ST),
         safe_eval(lambda: model.Runtime),
+        safe_eval(lambda: model.Runtime),
         safe_eval(lambda: model.MIPGap) if has_solution else None,
         has_solution,
         safe_eval(lambda: model.Status),
         encode_solution_group(solution, "eta"),
         encode_solution_group(solution, "gamma_LT"),
         encode_solution_group(solution, "gamma_ST"),
+        encode_solution_group(solution, "alpha"),
         encode_scenarios(scenario_ids),
         args.seed,
         args.node_id,
@@ -271,6 +398,11 @@ def main() -> None:
 
     all_coalitions = list(generate_coalitions(actors))
 
+    shared_sample = None
+    if args.sampling_mode == "shared":
+        shared_sample = sample_scenarios(args, rng)
+        print(f"Shared scenarios: {encode_scenarios(shared_sample[0])}")
+
     assigned = assign_coalitions(
         all_coalitions,
         node_id=args.node_id,
@@ -282,24 +414,30 @@ def main() -> None:
         f"{len(assigned)} of {len(all_coalitions)} coalitions assigned."
     )
 
+    standalone_costs = {}
+
     for coalition in assigned:
         name = coalition_name(coalition)
 
         print(f"[solve] {name} {coalition}")
 
         try:
-            row = solve_coalition(args, coalition, rng)
+            row = solve_coalition(args, coalition, rng, shared_sample=shared_sample)
+            add_synergy_to_row(row, coalition, standalone_costs)
         except Exception as exc:
             print(f"[error] {name}: {type(exc).__name__}: {exc}")
             row = [
                 name,
                 len(coalition),
-                None, None, None, None, None, None, None, None, None,
-                None, None, None, None, None,
+                args.method,
+                "",
+                None, None, None,
+                None, None, None, None, None, None, None, None,
+                None, None, None, None, None, None,
                 None,
                 False,
                 None,
-                "", "", "",
+                "", "", "", "",
                 "",
                 args.seed,
                 args.node_id,

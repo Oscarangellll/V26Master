@@ -94,13 +94,13 @@ class FixedData:
     ]
 
     wind_farms = [
-        WindFarm("A",
-            lat=55.3,
-            lon=7.8,
-            n_turbines=50,
-            iso="DNK",
-            weather_location_id=1,
-        ),
+        # WindFarm("A",
+        #     lat=55.3,
+        #     lon=7.8,
+        #     n_turbines=50,
+        #     iso="DNK",
+        #     weather_location_id=1,
+        # ),
         WindFarm("B",
             lat=54.64,
             lon=7.94,
@@ -143,13 +143,13 @@ class FixedData:
             iso="GBR",
             weather_location_id=5,
         ),
-        WindFarm("H",
-            lat=53.99,
-            lon=0.48,
-            n_turbines=80,
-            iso="GBR",
-            weather_location_id=5,
-        ),
+        # WindFarm("H",
+        #     lat=53.99,
+        #     lon=0.48,
+        #     n_turbines=80,
+        #     iso="GBR",
+        #     weather_location_id=5,
+        # ),
     ]
 
     weather_locations = [
@@ -164,30 +164,30 @@ class FixedData:
     weather_to_year = 2025
 
     bases = [
-        Base("1",
-            lat=56.66,
-            lon=8.21,
-            capacity=100,
-            cost=0
-        ),
-        Base("2",
-            lat=55.48,
-            lon=8.34,
-            capacity=100,
-            cost=0
-        ),
+        # Base("1",
+        #     lat=56.66,
+        #     lon=8.21,
+        #     capacity=100,
+        #     cost=0
+        # ),
+        # Base("2",
+        #     lat=55.48,
+        #     lon=8.34,
+        #     capacity=100,
+        #     cost=0
+        # ),
         Base("3",
             lat=54.68,
             lon=8.74,
             capacity=100,
             cost=0
         ),
-        Base("4",
-            lat=53.87,
-            lon=8.63,
-            capacity=100,
-            cost=0
-        ),
+        # Base("4",
+        #     lat=53.87,
+        #     lon=8.63,
+        #     capacity=100,
+        #     cost=0
+        # ),
         Base("5",
             lat=53.63,
             lon=7.14,
@@ -206,12 +206,12 @@ class FixedData:
             capacity=100,
             cost=0
         ),
-        Base("8",
-            lat=54.35,
-            lon=-0.47,
-            capacity=100,
-            cost=0
-        ),
+        # Base("8",
+        #     lat=54.35,
+        #     lon=-0.47,
+        #     capacity=100,
+        #     cost=0
+        # ),
     ]
 
     maintenance_categories = [
