@@ -146,6 +146,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--coalition-sizes",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Only solve coalitions with these sizes, e.g. --coalition-sizes 5 6.",
+    )
+
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="Append rows to the output CSV instead of overwriting it.",
+    )
+
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip coalitions that already have a row in the output CSV.",
+    )
+
+    parser.add_argument(
         "--output",
         default=None,
         help="Output CSV path. Default: results/coalitions/con_mp/node_{node_id}.csv",
@@ -257,6 +277,41 @@ def write_header(path: Path):
     with path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(COLUMNS)
+
+
+def ensure_header(path: Path):
+    if path.exists() and path.stat().st_size > 0:
+        return
+
+    write_header(path)
+
+
+def read_existing_output(path: Path):
+    standalone_costs = {}
+    existing_coalitions = set()
+
+    if not path.exists() or path.stat().st_size == 0:
+        return standalone_costs, existing_coalitions
+
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            coalition = row.get("coalition")
+            if coalition:
+                existing_coalitions.add(coalition)
+
+            if row.get("coalition_size") != "1":
+                continue
+            if str(row.get("has_solution")).lower() not in {"true", "1"}:
+                continue
+
+            objective = row.get("objective")
+            if objective in {None, ""}:
+                continue
+
+            standalone_costs[coalition] = float(objective)
+
+    return standalone_costs, existing_coalitions
 
 
 def write_row(path: Path, row: list):
@@ -394,9 +449,15 @@ def main() -> None:
         else Path("results/coalitions/con_mp") / f"node_{args.node_id}.csv"
     )
 
-    write_header(output_path)
-
     all_coalitions = list(generate_coalitions(actors))
+
+    if args.append:
+        ensure_header(output_path)
+        standalone_costs, existing_coalitions = read_existing_output(output_path)
+    else:
+        write_header(output_path)
+        standalone_costs = {}
+        existing_coalitions = set()
 
     shared_sample = None
     if args.sampling_mode == "shared":
@@ -408,16 +469,25 @@ def main() -> None:
         node_id=args.node_id,
         num_nodes=args.num_nodes,
 
-    )   
+    )
+    if args.coalition_sizes is not None:
+        allowed_sizes = set(args.coalition_sizes)
+        assigned = [
+            coalition for coalition in assigned
+            if len(coalition) in allowed_sizes
+        ]
+
     print(
         f"Node {args.node_id}/{args.num_nodes}: "
         f"{len(assigned)} of {len(all_coalitions)} coalitions assigned."
     )
 
-    standalone_costs = {}
-
     for coalition in assigned:
         name = coalition_name(coalition)
+
+        if args.skip_existing and name in existing_coalitions:
+            print(f"[skip] {name} already exists in {output_path}")
+            continue
 
         print(f"[solve] {name} {coalition}")
 
