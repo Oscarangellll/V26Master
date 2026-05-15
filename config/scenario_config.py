@@ -8,6 +8,12 @@ class ScenarioConfig:
     def __init__(self, case, scenario_ids):
                 
         scenario_data_dir = Path(os.environ.get("SCENARIO_DATA_DIR", "data/scenario_data"))
+        failure_scenario_dir = Path(
+            os.environ.get(
+                "FAILURE_SCENARIO_DIR",
+                scenario_data_dir / "failures",
+            )
+        )
 
         # Second stage sets
         df_K_S = pd.read_parquet(
@@ -40,7 +46,7 @@ class ScenarioConfig:
         self.P = {(r.m, r.k): r.task_count for r in df_P.itertuples()}
         
         df_F = pd.read_parquet(
-            scenario_data_dir / "failures", 
+            failure_scenario_dir,
             filters=[
                 ("s", "in", scenario_ids),
                 ("w", "in", case.W),
