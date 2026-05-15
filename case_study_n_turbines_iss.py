@@ -30,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--failure-root",
-        default="data/scenario_data_n_turbines",
+        default="data/scenario_data/scenario_data_n_turbines",
         help="Root containing <case>/failures folders.",
     )
     parser.add_argument(
