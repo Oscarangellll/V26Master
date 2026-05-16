@@ -11,14 +11,20 @@ def add_synergy_columns(df):
     df = df.copy()
     df["coalition"] = df["coalition"].astype(str)
     df["objective"] = pd.to_numeric(df["objective"], errors="coerce")
+    group_cols = ["case_id"] if "case_id" in df.columns else []
+    if group_cols:
+        df["case_id"] = df["case_id"].astype(str)
 
-    standalone_costs = (
-        df[df["coalition"].str.len() == 1]
-        .dropna(subset=["objective"])
-        .drop_duplicates(subset=["coalition"], keep="first")
-        .set_index("coalition")["objective"]
-        .to_dict()
-    )
+    standalone_costs_by_group = {}
+    groups = df.groupby(group_cols, dropna=False) if group_cols else [(None, df)]
+    for group_key, group in groups:
+        standalone_costs_by_group[group_key] = (
+            group[group["coalition"].str.len() == 1]
+            .dropna(subset=["objective"])
+            .drop_duplicates(subset=["coalition"], keep="first")
+            .set_index("coalition")["objective"]
+            .to_dict()
+        )
 
     standalone_values = []
     synergy_values = []
@@ -26,6 +32,8 @@ def add_synergy_columns(df):
     for row in df.to_dict("records"):
         coalition = str(row["coalition"])
         objective = row.get("objective")
+        group_key = row["case_id"] if group_cols else None
+        standalone_costs = standalone_costs_by_group.get(group_key, {})
 
         if pd.isna(objective) or not all(member in standalone_costs for member in coalition):
             standalone_values.append(None)
