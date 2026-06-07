@@ -9,6 +9,9 @@ from data.scripts import make_scenarios
 from data.scripts import process_price_data
 
 
+DEFAULT_N_SCENARIOS = 1500
+
+
 def build_parser():
     parser = argparse.ArgumentParser()
 
@@ -27,7 +30,7 @@ def build_parser():
     parser.add_argument(
         "--n_scenarios",
         type=int,
-        default=data.n_scenarios_to_generate,
+        default=DEFAULT_N_SCENARIOS,
         help="Number of scenarios to generate.",
     )
     return parser

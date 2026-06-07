@@ -1,0 +1,43 @@
+case group,case,coalition,selected bases,Objval [MEUR],savings [MEUR],synergy [%],Stable core,Best collaboration structure,SOV share,avg distance [km],n turbines
+distance,ABC,A,1,21.049,0.0,0.0,,A,0.304,0.0,100.0
+distance,ABC,B,2,18.744,0.0,0.0,,B,0.36,0.0,100.0
+distance,ABC,C,2,17.246,0.0,0.0,,C,0.292,0.0,100.0
+distance,ABC,AB,1,36.326,3.468,9.546,True,AB,0.366,63.474,200.0
+distance,ABC,AC,2,35.984,2.311,6.421,True,AC,0.4,91.744,200.0
+distance,ABC,BC,2,34.92,1.069,3.062,True,BC,0.357,61.764,200.0
+distance,ABC,ABC,2,52.087,4.953,9.508,True,ABC,0.321,72.327,300.0
+distance,ABF,A,1,21.049,0.0,0.0,,A,0.304,0.0,100.0
+distance,ABF,B,2,18.744,0.0,0.0,,B,0.36,0.0,100.0
+distance,ABF,F,4,12.326,0.0,0.0,,F,0.25,0.0,100.0
+distance,ABF,AB,1,36.326,3.468,9.546,True,AB,0.366,63.474,200.0
+distance,ABF,AF,4,32.094,1.282,3.993,True,AF,0.552,454.609,200.0
+distance,ABF,BF,4,29.969,1.101,3.675,True,BF,0.452,453.294,200.0
+distance,ABF,ABF,1,48.117,4.003,8.319,True,ABF,0.365,323.793,300.0
+distance,ADF,A,1,21.049,0.0,0.0,,A,0.304,0.0,100.0
+distance,ADF,D,3,18.147,0.0,0.0,,D,0.32,0.0,100.0
+distance,ADF,F,4,12.326,0.0,0.0,,F,0.25,0.0,100.0
+distance,ADF,AD,2,37.33,1.867,5.001,True,AD,0.37,219.736,200.0
+distance,ADF,AF,4,32.094,1.282,3.993,True,AF,0.552,454.609,200.0
+distance,ADF,DF,4,28.564,1.91,6.685,True,DF,0.4,245.152,200.0
+distance,ADF,ADF,4,48.582,2.941,6.053,True,ADF,0.615,306.499,300.0
+n turbines,ABC high,A,1,27.952,0.0,0.0,,A,0.429,0.0,150.0
+n turbines,ABC high,B,1,24.607,0.0,0.0,,B,0.4,0.0,150.0
+n turbines,ABC high,C,2,24.114,0.0,0.0,,C,0.31,0.0,150.0
+n turbines,ABC high,AB,1,49.84,2.719,5.456,True,AB,0.383,63.474,300.0
+n turbines,ABC high,AC,2,49.854,2.212,4.437,True,AC,0.383,91.744,300.0
+n turbines,ABC high,BC,2,47.516,1.206,2.538,True,BC,0.408,61.764,300.0
+n turbines,ABC high,ABC,2,73.136,3.538,4.837,True,ABC,0.316,72.327,450.0
+n turbines,ABC low,A,1,12.515,0.0,0.0,,A,0.333,0.0,50.0
+n turbines,ABC low,B,1,11.739,0.0,0.0,,B,0.333,0.0,50.0
+n turbines,ABC low,C,2,10.661,0.0,0.0,,C,0.222,0.0,50.0
+n turbines,ABC low,AB,1,21.533,2.721,12.637,True,AB,0.259,63.474,100.0
+n turbines,ABC low,AC,2,21.766,1.411,6.481,True,AC,0.194,91.744,100.0
+n turbines,ABC low,BC,2,20.18,2.22,11.001,True,BC,0.2,61.764,100.0
+n turbines,ABC low,ABC,2,31.774,3.141,9.885,False,ABC,0.286,72.327,150.0
+n turbines,ABC mixed,A,1,12.515,0.0,0.0,,A,0.333,0.0,50.0
+n turbines,ABC mixed,B,1,18.654,0.0,0.0,,B,0.25,0.0,100.0
+n turbines,ABC mixed,C,2,24.114,0.0,0.0,,C,0.31,0.0,150.0
+n turbines,ABC mixed,AB,1,29.308,1.862,6.352,True,AB,0.27,63.474,150.0
+n turbines,ABC mixed,AC,2,35.178,1.452,4.127,True,AC,0.4,91.744,200.0
+n turbines,ABC mixed,BC,2,41.68,1.088,2.61,True,BC,0.28,61.764,250.0
+n turbines,ABC mixed,ABC,2,51.137,4.147,8.11,True,ABC,0.339,72.327,300.0

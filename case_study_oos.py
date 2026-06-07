@@ -149,6 +149,12 @@ def _parse_bases(encoded):
     return [part.strip() for part in encoded.split(";") if part.strip()]
 
 
+def _parse_scenarios(encoded):
+    if not isinstance(encoded, str) or encoded.strip() == "":
+        return []
+    return [int(part.strip()) for part in encoded.split(";") if part.strip()]
+
+
 def _scenario_label(start, end):
     return f"{start}-{end}"
 
@@ -387,9 +393,16 @@ def run(args):
 
     unique_rows = []
     evaluated = set()
+    selected_coalitions = (
+        {"".join(sorted(coalition)) for coalition in args.coalitions}
+        if args.coalitions is not None
+        else None
+    )
     for row in results.to_dict("records"):
         row["_fix_alpha"] = args.fix_alpha
         coalition = str(row["coalition"])
+        if selected_coalitions is not None and coalition not in selected_coalitions:
+            continue
         key = (coalition, _solution_key(row))
         if key in evaluated:
             continue
@@ -418,13 +431,18 @@ def run(args):
             bases=args.bases if args.bases is not None else row_bases,
             max_multiday_vessels=args.max_multiday_vessels,
         )
-        scenario_cfg = ScenarioConfig(case, oos_scenarios)
+        eval_scenarios = oos_scenarios
+        if not eval_scenarios:
+            print(f"[case OOS warning] coalition={coalition}: no scenarios to evaluate.")
+            continue
+
+        scenario_cfg = ScenarioConfig(case, eval_scenarios)
         solution = _decode_solution(row)
 
         totals, windfarm_rows, solved_count = _evaluate_solution(
             case=case,
             solution=solution,
-            oos_scenarios=oos_scenarios,
+            oos_scenarios=eval_scenarios,
             scenario_cfg=scenario_cfg,
             fixed_groups=fixed_groups,
         )
@@ -510,6 +528,12 @@ def build_parser():
     parser.add_argument("--oos-end", type=int, default=1500)
     parser.add_argument("--num-nodes", type=int, default=1)
     parser.add_argument("--node-id", type=int, default=0)
+    parser.add_argument(
+        "--coalitions",
+        nargs="+",
+        default=None,
+        help="Only evaluate selected coalitions, e.g. --coalitions BCD BCG BEG.",
+    )
     parser.add_argument(
         "--coalition-output",
         default="results/case_studies/base/coalition_oos.csv",

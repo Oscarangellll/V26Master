@@ -1,0 +1,36 @@
+sampling_method,tree_size,count,oss_objective_meur
+Count over 8,1,20,30.666
+Count over 8,3,20,28.959
+Count over 8,5,20,28.764
+Count over 8,7,20,28.885
+Count over 8,10,20,28.826
+Count over 8,15,20,28.835
+Count over 8,20,16,28.776
+Count under 4,1,20,29.628
+Count under 4,3,20,29.083
+Count under 4,5,20,28.871
+Count under 4,7,20,28.879
+Count under 4,10,20,28.743
+Count under 4,15,20,28.775
+Count under 4,20,13,28.778
+Max streak,1,20,29.32
+Max streak,3,20,29.193
+Max streak,5,20,28.989
+Max streak,7,20,28.794
+Max streak,10,20,28.77
+Max streak,15,20,28.934
+Max streak,20,12,28.634
+Random,1,20,29.685
+Random,3,20,29.0
+Random,5,20,28.867
+Random,7,20,28.897
+Random,10,20,28.757
+Random,15,20,28.781
+Random,20,18,28.745
+Total ww hours,1,20,29.577
+Total ww hours,3,20,28.896
+Total ww hours,5,20,28.805
+Total ww hours,7,20,28.852
+Total ww hours,10,20,28.815
+Total ww hours,15,20,28.855
+Total ww hours,20,19,28.735

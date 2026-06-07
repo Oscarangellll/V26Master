@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
 
 from plot_scripts.config import PLOT_DIR, FIGWIDTH
 
@@ -7,6 +8,9 @@ from plot_scripts.config import PLOT_DIR, FIGWIDTH
 def plot_real_weather_correlation():
 
     df = pd.read_parquet("data/weather/weather.parquet")
+    weather_location_ids = [2, 3, 4, 5]
+    labels = [1, 2, 3, 4]
+    df = df[df["weather_location_id"].isin(weather_location_ids)]
 
     # ---------------------------------
     # Create wide tables
@@ -56,8 +60,6 @@ def plot_real_weather_correlation():
     # Labels
     # ---------------------------------
 
-    labels = speed_corr.columns
-
     for ax in axs:
 
         ax.set_xticks(range(len(labels)))
@@ -81,8 +83,7 @@ def plot_real_weather_correlation():
 
     cbar.set_label("Correlation")
 
-    fig.savefig(
-        PLOT_DIR + "real_weather_correlation.svg"
-    )
-
-    plt.show()
+    output_dir = Path(PLOT_DIR) / "weather_validation_plots"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / "real_weather_correlation.svg")
+    plt.close(fig)

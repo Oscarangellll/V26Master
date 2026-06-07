@@ -1,0 +1,19 @@
+case group,case,wind farm,SOV share,Stable core,Best collaboration structure,allocated savings [MEUR],minmax p,time availability [%],value availability [%],downtime cost [MEUR],potential revenue [MEUR]
+distance,ABC,A,0.321,True,ABC,2.83,0.028,98.056,97.08,13.746,470.828
+distance,ABC,B,0.321,True,ABC,1.644,0.028,98.372,97.577,11.334,467.67
+distance,ABC,C,0.321,True,ABC,0.478,0.028,98.442,97.647,11.005,467.67
+distance,ABF,A,0.365,True,ABF,1.499,0.011,98.229,97.335,12.548,470.828
+distance,ABF,B,0.365,True,ABF,2.368,0.011,98.485,97.755,10.501,467.67
+distance,ABF,F,0.365,True,ABF,0.136,0.011,98.837,98.452,7.399,477.88
+distance,ADF,A,0.615,True,ADF,0.791,0.008,98.025,97.187,13.244,470.828
+distance,ADF,D,0.615,True,ADF,1.39,0.008,98.458,97.691,10.909,472.524
+distance,ADF,F,0.615,True,ADF,0.76,0.008,99.243,98.784,5.809,477.88
+n turbines,ABC high,A,0.316,True,ABC,2.029,0.006,98.137,97.184,19.888,706.242
+n turbines,ABC high,B,0.316,True,ABC,1.008,0.006,98.483,97.724,15.964,701.506
+n turbines,ABC high,C,0.316,True,ABC,0.501,0.006,98.531,97.775,15.608,701.506
+n turbines,ABC low,A,0.286,False,ABC,0.943,-0.001,97.704,96.768,7.608,235.414
+n turbines,ABC low,B,0.286,False,ABC,1.754,-0.001,98.15,97.377,6.133,233.835
+n turbines,ABC low,C,0.286,False,ABC,0.443,-0.001,98.313,97.537,5.759,233.835
+n turbines,ABC mixed,A,0.339,True,ABC,1.531,0.037,97.735,96.715,7.734,235.414
+n turbines,ABC mixed,B,0.339,True,ABC,1.405,0.037,98.383,97.591,11.266,467.67
+n turbines,ABC mixed,C,0.339,True,ABC,1.211,0.037,98.564,97.825,15.259,701.506

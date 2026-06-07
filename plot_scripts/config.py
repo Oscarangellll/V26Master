@@ -10,4 +10,8 @@ class colors:
     orange = "#ff7f0e"
     cyan = "#17becf"
 
+    consensus_iss = blue
+    consensus_oss = red
+    direct_mip = green
+
 FIGWIDTH = 15

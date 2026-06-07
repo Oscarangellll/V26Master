@@ -1,9 +1,15 @@
 import geopandas as gpd
+import matplotlib
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 from data.fixed_data import data
+from pathlib import Path
+
 from plot_scripts.config import PLOT_DIR, colors, FIGWIDTH
 
 def make_gdf(items):
@@ -24,7 +30,7 @@ gdf_bases = make_gdf(data.bases)
 world = gpd.read_file(
     "https://naturalearth.s3.amazonaws.com/50m_cultural/ne_50m_admin_0_countries.zip"
 )
-def get_bounds(gdf_wf, gdf_bases, pad_x=0.20, pad_y=0.08):
+def get_bounds(gdf_wf, gdf_bases, pad_x=0.08, pad_y=0.08):
     combined = pd.concat([gdf_wf, gdf_bases])
 
     minx, miny, maxx, maxy = combined.total_bounds
@@ -94,5 +100,7 @@ def plot_map():
     ax.set_ylabel("Latitude")
     ax.set_title("Wind farms and bases")
 
-    fig.savefig(PLOT_DIR + "map")
-    plt.show()
+    output_dir = Path(PLOT_DIR) / "weather_validation_plots"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / "map.svg", bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)

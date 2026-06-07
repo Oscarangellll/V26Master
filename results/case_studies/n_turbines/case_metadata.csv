@@ -1,0 +1,4 @@
+case,B,C,D,failure_dir,output,n_scenarios,scenario_start,scenario_end,seed,sampling_mode
+BCD_low,50,50,50,/storage/users/oscarang/scenario_data/scenario_data_n_turbines/BCD_low/failures,results/case_studies/n_turbines/BCD_low/iss.csv,15,1,500,20,shared
+BCD_high,150,150,150,/storage/users/oscarang/scenario_data/scenario_data_n_turbines/BCD_high/failures,results/case_studies/n_turbines/BCD_high/iss.csv,15,1,500,20,shared
+BCD_mixed,50,100,150,/storage/users/oscarang/scenario_data/scenario_data_n_turbines/BCD_mixed/failures,results/case_studies/n_turbines/BCD_mixed/iss.csv,15,1,500,20,shared

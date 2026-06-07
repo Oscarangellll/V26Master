@@ -293,7 +293,7 @@ def read_existing_output(path: Path):
     if not path.exists() or path.stat().st_size == 0:
         return standalone_costs, existing_coalitions
 
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             coalition = row.get("coalition")

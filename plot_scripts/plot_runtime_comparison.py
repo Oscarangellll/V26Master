@@ -1,63 +1,107 @@
+import matplotlib
+
+matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
+from matplotlib.lines import Line2D
 
-from plot_scripts.config import PLOT_DIR, colors, FIGWIDTH
+from plot_scripts.config import FIGWIDTH, PLOT_DIR, colors
 
-MIP_FILES = {
-    "1W1B mip": "results/stability/1W1B/mip/ISS.csv",
-    "2W2B mip": "results/stability/2W2B/mip/ISS.csv",
-    "3W2B mip": "results/stability/3W2B/mip/ISS.csv",
-    "4W3B mip": "results/stability/4W3B/mip/ISS.csv",
+
+CASES = ["1W1B", "2W2B", "3W2B", "4W3B"]
+TREE_SIZES = [1, 3, 5, 7, 10, 15, 20]
+MIN_INSTANCES = 19
+MAX_MIP_TREE_SIZE_BY_CASE = {
+    "3W2B": 10,
+    "4W3B": 3,
 }
 
-CON_FILES = {
-    "1W1B con": "results/stability/1W1B/con_mp/ISS.csv",
-    "2W2B con": "results/stability/2W2B/con_mp/ISS.csv",
-    "3W2B con": "results/stability/3W2B/con_mp/ISS.csv",
-    "4W3B con": "results/stability/4W3B/con_mp/ISS.csv",
-}
 
-def compute_runtime_avg(path, method):
-    if method == "mip":
-        colname = "MIP_runtime" 
-    if method == "con":
-        colname = "Con_total runtime"
-    df = pd.read_csv(path)[["tree_size", colname]]
-    
-    results = []
+def _runtime_average(path, column, count_path):
+    df = pd.read_csv(path)[["tree_size", column]]
+    count_df = pd.read_csv(count_path)[["tree_size", "count"]]
+    counts = count_df.groupby("tree_size")["count"].sum().to_dict()
 
+    rows = []
     for tree_size, group in df.groupby("tree_size"):
+        valid = group[column].dropna()
+        if len(valid) > 0:
+            rows.append(
+                {
+                    "tree_size": tree_size,
+                    "avg": valid.mean(),
+                    "n": counts.get(tree_size, 0),
+                }
+            )
+    return pd.DataFrame(rows).sort_values("tree_size")
 
-        if len(group) == 20:
-            avg = group[colname].mean()
 
-            results.append({
-                "tree_size": tree_size,
-                "avg": avg
-            })
+def _plot_runtime(ax, df, color, marker, label):
+    if df.empty:
+        ax.plot([], [], color=color, marker=marker, label=label)
+        return
+    ax.scatter(df["tree_size"], df["avg"], color=color, marker=marker, label=label, zorder=3)
+    df = df.sort_values("tree_size").reset_index(drop=True)
+    for idx in range(len(df) - 1):
+        segment = df.iloc[idx : idx + 2]
+        linestyle = "-" if (segment["n"] >= MIN_INSTANCES).all() else "--"
+        ax.plot(
+            segment["tree_size"],
+            segment["avg"],
+            color=color,
+            linestyle=linestyle,
+            linewidth=1.4,
+        )
 
-    return pd.DataFrame(results)
+
+def _filter_mip_tree_sizes(case, df):
+    max_tree_size = MAX_MIP_TREE_SIZE_BY_CASE.get(case)
+    if max_tree_size is None:
+        return df
+    return df[df["tree_size"] <= max_tree_size]
 
 
 def plot_runtime_comparison():
+    output_dir = Path(PLOT_DIR) / "ISS_OSS"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig, axs = plt.subplots(2, 2, figsize=(FIGWIDTH / 2.54, 8 / 2.54))
 
-    fig, ax = plt.subplots(figsize=(FIGWIDTH/2.54, 3))
+    for ax, case in zip(axs.flat, CASES):
+        mip = _runtime_average(
+            f"results/stability/{case}/mip/ISS.csv",
+            "MIP_runtime",
+            f"results/stability/{case}/mip/OSS.csv",
+        )
+        con = _runtime_average(
+            f"results/stability/{case}/con_mp/ISS.csv",
+            "Con_total runtime",
+            f"results/stability/{case}/con_mp/OSS.csv",
+        )
+        mip = _filter_mip_tree_sizes(case, mip)
 
-    for name, path in MIP_FILES.items():
-        df = compute_runtime_avg(path, "mip")
-        ax.plot(df["tree_size"], df["avg"], label=name, color="blue")
+        _plot_runtime(ax, mip, colors.direct_mip, "o", "Direct MIP")
+        _plot_runtime(ax, con, colors.consensus_oss, "s", "Consensus")
 
-    for name, path in CON_FILES.items():
-        df = compute_runtime_avg(path, "con")
-        ax.plot(df["tree_size"], df["avg"], label=name, color="red")
+        ax.set_title(case)
+        ax.set_xticks(TREE_SIZES)
+        ax.grid(color="0.90", linewidth=0.5)
 
-    ax.set_xlabel("Tree size")
-    ax.set_ylabel("Runtime [s]")
+    fig.supxlabel("Tree size", y=0.04)
+    fig.supylabel("Runtime [s]", x=0.04)
+    handles = [
+        Line2D([0], [0], color=colors.direct_mip, marker="o", linewidth=1.4, label="Direct MIP"),
+        Line2D([0], [0], color=colors.consensus_oss, marker="s", linewidth=1.4, label="Consensus"),
+    ]
+    fig.legend(
+        handles=handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.99),
+        ncol=2,
+        frameon=False,
+    )
+    fig.subplots_adjust(top=0.82, bottom=0.16, left=0.12, right=0.98, hspace=0.45, wspace=0.32)
 
-    ax.set_xticks([1, 3, 5, 7, 10, 15, 20])
-
-    ax.legend()
-    
-    fig.savefig(PLOT_DIR + "runtime_comparison")
-    plt.show()
+    fig.savefig(output_dir / "runtime_comparison.svg")
+    plt.close(fig)

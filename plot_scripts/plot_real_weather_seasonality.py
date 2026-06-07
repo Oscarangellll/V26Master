@@ -1,11 +1,15 @@
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
 
 from plot_scripts.config import PLOT_DIR, colors, FIGWIDTH
 
 def plot_real_weather_seasonality():
     df = pd.read_parquet("data/weather/weather.parquet")
+    weather_location_ids = [2, 3, 4, 5]
+    location_labels = {2: 1, 3: 2, 4: 3, 5: 4}
+    df = df[df["weather_location_id"].isin(weather_location_ids)].copy()
     
     df["month"] = df.index.month
 
@@ -25,11 +29,13 @@ def plot_real_weather_seasonality():
         axs[0].plot(
             group["month"],
             group["speed"],
+            label=location_labels[loc_id],
         )
 
         axs[1].plot(
             group["month"],
             group["height"],
+            label=location_labels[loc_id],
         )
 
     axs[0].set_ylabel("Wind speed [m/s]")
@@ -39,5 +45,20 @@ def plot_real_weather_seasonality():
         ax.set_xticks(range(1, 13))
         ax.set_xticklabels(month_labels, rotation=45)
     
-    fig.savefig(PLOT_DIR + "real_weather_seasonality")
-    plt.show()
+    handles, labels = axs[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        title="Location",
+        loc="upper center",
+        ncol=4,
+        frameon=False,
+        fontsize=8,
+        title_fontsize=8,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
+    
+    output_dir = Path(PLOT_DIR) / "weather_validation_plots"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_dir / "real_weather_seasonality.svg")
+    plt.close(fig)

@@ -1,0 +1,4 @@
+case,actors,failure_dir,output,turbine_count,n_scenarios,scenario_start,scenario_end,seed,sampling_mode
+BCD_close,B;C;D,/storage/users/oscarang/scenario_data/scenario_data_distance/uniform_100/failures,results/case_studies/distance/BCD_close/iss.csv,100,15,1,500,20,shared
+BCG_cluster_far,B;C;G,/storage/users/oscarang/scenario_data/scenario_data_distance/uniform_100/failures,results/case_studies/distance/BCG_cluster_far/iss.csv,100,15,1,500,20,shared
+BEG_spread,B;E;G,/storage/users/oscarang/scenario_data/scenario_data_distance/uniform_100/failures,results/case_studies/distance/BEG_spread/iss.csv,100,15,1,500,20,shared

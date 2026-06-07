@@ -48,11 +48,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only evaluate selected coalitions.",
     )
     parser.add_argument(
-        "--use-iss-scenarios",
-        action="store_true",
-        help="Evaluate each row on its ISS scenarios instead of the OOS range.",
-    )
-    parser.add_argument(
         "--fix-alpha",
         action="store_true",
         help="Also fix alpha vessel-index decisions during OOS evaluation.",
@@ -80,7 +75,6 @@ def _oos_args(args: argparse.Namespace, case_name: str) -> SimpleNamespace:
         num_nodes=1,
         node_id=0,
         coalitions=args.coalitions,
-        use_iss_scenarios=args.use_iss_scenarios,
         coalition_output=str(case_dir / "coalition_oos.csv"),
         windfarm_output=str(case_dir / "windfarm_oos.csv"),
         fix_alpha=args.fix_alpha,
